@@ -2,7 +2,7 @@ name: Deploy Notification To staging.phcode.dev
 
 on:
   repository_dispatch:
-    types: [my-event]
+    types: [deploy-staging]
 
 jobs:
   build-tasks:
