@@ -28,3 +28,9 @@ jobs:
           mkdir -p ./public
           cp -r ./phoenix/dist ./public
         shell: bash
+      - name: Deploy Github Pages
+        uses: peaceiris/actions-gh-pages@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
