@@ -1,0 +1,14 @@
+name: Deploy Notification To staging.phcode.dev
+
+on:
+  repository_dispatch:
+    types: [my-event]
+
+jobs:
+  build-tasks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Event triggered by
+        run: |
+          echo ${{ github.event.client_payload.sha }},${{ github.event.client_payload.ref }}
