@@ -11,4 +11,4 @@ jobs:
       - uses: actions/checkout@v3
       - name: Event triggered by
         run: |
-          echo ${{ github.event.client_payload.sha }},${{ github.event.client_payload.ref }}
+          echo source: ${{github.event.client_payload.source}}, action: ${{github.event.client_payload.action}}, action_run_id: ${{github.event.client_payload.run_id}}, action_run_number: ${{github.event.client_payload.run_number}}, sha: ${{ github.event.client_payload.sha }}, github_ref: ${{ github.event.client_payload.ref }}
