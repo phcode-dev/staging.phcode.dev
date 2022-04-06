@@ -1,8 +1,8 @@
 name: Deploy Notification To staging.phcode.dev
 
 on:
-  push:
-    branches: [ main ]
+  repository_dispatch:
+    types: [deploy-staging]
 
 jobs:
   build-tasks:
