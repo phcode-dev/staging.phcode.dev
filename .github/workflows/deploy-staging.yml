@@ -12,6 +12,7 @@ jobs:
       - name: Event triggered by
         run: |
           echo source: ${{github.event.client_payload.source}}, workflow: ${{github.event.client_payload.workflow}}, action_run_id: ${{github.event.client_payload.run_id}}, action_run_number: ${{github.event.client_payload.run_number}}, sha: ${{ github.event.client_payload.sha }}, github_ref: ${{ github.event.client_payload.ref }}
+
       - name: Checking Out https://github.com/phcode-dev/phoenix
         uses: actions/checkout@v2
         with:
@@ -23,14 +24,11 @@ jobs:
           npm install
           npm run release
         shell: bash
+
       - name: Copying release artifacts to public folder
         run: |
           mkdir -p ./public
           cp -r ./phoenix/dist/. ./public
-        shell: bash
-      - name: Creating CNAME for github page custom domain activation
-        run: |
-          echo "staging.phcode.dev" >> ./public/CNAME
         shell: bash
       - name: Deploy Github Pages
         uses: peaceiris/actions-gh-pages@v3
@@ -38,3 +36,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./public
+          cname: staging.phcode.dev
