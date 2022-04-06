@@ -26,7 +26,7 @@ jobs:
       - name: Copying release artifacts to public folder
         run: |
           mkdir -p ./public
-          cp -r ./phoenix/dist ./public
+          cp -r ./phoenix/dist/. ./public
         shell: bash
       - name: Deploy Github Pages
         uses: peaceiris/actions-gh-pages@v3
