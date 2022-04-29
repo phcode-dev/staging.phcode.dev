@@ -19,7 +19,7 @@
     "extension_url": "https://s3.amazonaws.com/extend.brackets/{0}/{0}-{1}.zip",
     "extension_store_url": "https://store.core.ai/src/",
     "linting.enabled_by_default": true,
-    "build_timestamp": "2022-04-29T19:31:08.632Z",
+    "build_timestamp": "2022-04-29T20:08:28.067Z",
     "googleAnalyticsID": "G-FP5S9BKDSJ",
     "environment": "stage",
     "update_info_url": "https://staging.phcode.dev/getupdates?locale=<locale>",
