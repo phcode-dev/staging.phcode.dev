@@ -36,7 +36,7 @@
  * const Metrics = brackets.getModule("utils/Metrics");
  * ```
  *
- * @module Metrics
+ * @module utils/Metrics
  */
 define(function (require, exports, module) {
     const MAX_AUDIT_ENTRIES = 3000;
@@ -54,17 +54,17 @@ define(function (require, exports, module) {
      *
      * ### Properties
      * `PLATFORM`, `PROJECT`, `THEMES`, `EXTENSIONS`, `EXTENSIONS`, `UI`, `UI_DIALOG`, `UI_BOTTOM_PANEL`,
-     * `UI_SIDE_PANEL`, `LIVE_PREVIEW`, `CODE_HINTS`, `EDITOR`, `SEARCH`, `SHARING`, `PERFORMANCE`
+     * `UI_SIDE_PANEL`, `LIVE_PREVIEW`, `CODE_HINTS`, `EDITOR`, `SEARCH`, `SHARING`, `PERFORMANCE`, `NEW_PROJECT`
      *
      * @typedef EVENT_TYPE
      * @type {Object}
      */
     const EVENT_TYPE = {
-        PLATFORM: "platform",
+        PLATFORM: "phoenix.platform",
         PROJECT: "project",
         THEMES: "themes",
         EXTENSIONS: "extensions",
-        UI: "UI",
+        UI: "phoenix.UI",
         UI_DIALOG: "ui-dialog",
         UI_BOTTOM_PANEL: "ui-bottomPanel",
         UI_SIDE_PANEL: "ui-sidePanel",
@@ -73,7 +73,8 @@ define(function (require, exports, module) {
         EDITOR: "editor",
         SEARCH: "search",
         SHARING: "sharing",
-        PERFORMANCE: "performance"
+        PERFORMANCE: "performance",
+        NEW_PROJECT: "new-project"
     };
 
     /**
@@ -159,7 +160,7 @@ define(function (require, exports, module) {
         if(!count){
             count = 1;
         }
-        let eventAct = `${action}.${category}.${label}`;
+        let eventAct = `${category}.${action}.${label}`;
         gtag('event', eventAct, {
             'event_category': category,
             'event_label': label,
@@ -206,6 +207,7 @@ define(function (require, exports, module) {
     /**
      * log a numeric count >=0
      * @example <caption>To log that user clicked searchButton 5 times:</caption>
+     * Metrics.countEvent(Metrics.EVENT_TYPE.UI, "searchButton", "click");
      * Metrics.countEvent(Metrics.EVENT_TYPE.UI, "searchButton", "click", 5);
      *
      * @param {EVENT_TYPE|string} eventType The kind of Event Type that needs to be logged- should be a js var compatible string.
@@ -214,10 +216,10 @@ define(function (require, exports, module) {
      * needs to be logged- should be a js var compatible string
      * @param {string} eventSubCategory The kind of Event Sub Category that
      * needs to be logged- should be a js var compatible string
-     * @param {number} count >=0
+     * @param {number} [count=1] >=0 , optional, if not set defaults to 1
      * @type {function}
      */
-    function countEvent(eventType, eventCategory, eventSubCategory, count) {
+    function countEvent(eventType, eventCategory, eventSubCategory, count= 1) {
         _logEventForAudit(eventType, eventCategory, eventSubCategory, count, AUDIT_TYPE_COUNT);
         _sendToGoogleAnalytics(eventType, eventCategory, eventSubCategory, count);
         _sendToCoreAnalytics(eventType, eventCategory, eventSubCategory, count);
