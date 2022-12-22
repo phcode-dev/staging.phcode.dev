@@ -19,6 +19,7 @@ jobs:
           repository: phcode-dev/phoenix
           ref: staging
           path: './phoenix'
+          fetch-depth: 0
       - name: Building phoenix release artifacts
         working-directory: ./phoenix
         run: |
