@@ -16,12 +16,12 @@ window.AppConfig = {
         "twitter_name": "@phcodedev",
         "contributors_url": "https://api.github.com/repos/phcode-dev/phoenix/contributors?per_page={0}&page={1}",
         "extension_listing_url": "",
-        "extension_registry": "https://brackets-archive.github.io/brackets-extensions/registry.json",
-        "extension_registry_version": "https://brackets-archive.github.io/brackets-extensions/registry_version.json",
-        "extension_url": "https://brackets-archive.github.io/brackets-extensions/extensions/",
+        "extension_registry": "https://extensions.phcode.dev/registry.json",
+        "extension_registry_version": "https://extensions.phcode.dev/registry_version.json",
+        "extension_url": "https://extensions.phcode.dev/extensions/",
         "extension_store_url": "https://store.core.ai/src/",
         "linting.enabled_by_default": true,
-        "build_timestamp": "2023-01-20T09:45:41.014Z",
+        "build_timestamp": "2023-01-20T15:01:15.672Z",
         "googleAnalyticsID": "G-FP5S9BKDSJ",
         "mixPanelID": "a7e08ffd43c37767c29b13df1d2e6c62",
         "coreAnalyticsID": "phoenix",
@@ -31,8 +31,8 @@ window.AppConfig = {
         "bugsnagEnv": "staging"
     },
     "name": "Phoenix",
-    "version": "3.1.6-19135",
-    "apiVersion": "3.1.6",
+    "version": "3.1.7-19137",
+    "apiVersion": "3.1.7",
     "homepage": "https://core.ai",
     "issues": {
         "url": "https://github.com/phcode-dev/phoenix/issues"
