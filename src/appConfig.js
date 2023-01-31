@@ -22,7 +22,7 @@ window.AppConfig = {
         "extension_url": "https://extensions.phcode.dev/extensions/",
         "extension_store_url": "https://store.core.ai/src/",
         "linting.enabled_by_default": true,
-        "build_timestamp": "2023-01-31T12:19:18.537Z",
+        "build_timestamp": "2023-01-31T13:10:24.164Z",
         "googleAnalyticsID": "G-FP5S9BKDSJ",
         "mixPanelID": "a7e08ffd43c37767c29b13df1d2e6c62",
         "coreAnalyticsID": "phoenix",
@@ -32,8 +32,8 @@ window.AppConfig = {
         "bugsnagEnv": "staging"
     },
     "name": "Phoenix",
-    "version": "3.1.11-19189",
-    "apiVersion": "3.1.11",
+    "version": "3.1.12-19191",
+    "apiVersion": "3.1.12",
     "homepage": "https://core.ai",
     "issues": {
         "url": "https://github.com/phcode-dev/phoenix/issues"
