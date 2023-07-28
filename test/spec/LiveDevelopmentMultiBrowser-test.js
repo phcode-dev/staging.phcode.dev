@@ -32,6 +32,7 @@ define(function (require, exports, module) {
             brackets,
             DocumentManager,
             LiveDevMultiBrowser,
+            LiveDevProtocol,
             EditorManager,
             CommandManager,
             BeautificationManager,
@@ -62,6 +63,7 @@ define(function (require, exports, module) {
                 brackets = testWindow.brackets;
                 DocumentManager = brackets.test.DocumentManager;
                 LiveDevMultiBrowser = brackets.test.LiveDevMultiBrowser;
+                LiveDevProtocol = brackets.test.LiveDevProtocol;
                 CommandManager      = brackets.test.CommandManager;
                 Commands            = brackets.test.Commands;
                 EditorManager       = brackets.test.EditorManager;
@@ -229,9 +231,9 @@ define(function (require, exports, module) {
             await endPreviewSession();
         });
 
-        xit(" todo should send notifications for removed stylesheets through link nodes", async function () {
-            // search for todo #remove_not_working
-        });
+        // search for todo #remove_not_working fix in future
+        // xit(" todo should send notifications for removed stylesheets through link nodes", async function () {
+        // });
 
         it("should push changes through browser connection when editing a related CSS", async function () {
             let localText,
@@ -293,19 +295,30 @@ define(function (require, exports, module) {
             await awaitsForDone(SpecRunnerUtils.openProjectFiles([fileName]),
                 "SpecRunnerUtils.openProjectFiles " + fileName, 1000);
 
-            await awaits(300);
-            expect(LiveDevMultiBrowser.status).toBe(LiveDevMultiBrowser.STATUS_ACTIVE);
+            await awaits(300); // todo can we remove this
+            await awaitsFor(
+                function isTextChanged() {
+                    return LiveDevMultiBrowser.status === LiveDevMultiBrowser.STATUS_ACTIVE;
+                },
+                "waiting for live preview active",
+                5000,
+                50
+            );
 
             let curDoc =  DocumentManager.getCurrentDocument();
             curDoc.replaceRange(editText, location);
-            let testId = testWindow.document.getElementById("panel-live-preview-frame")
-                .contentDocument.getElementById(verifyID);
+            let result;
             await awaitsFor(
                 function isTextChanged() {
-                    return testId.textContent === verifyText;
+                    LiveDevProtocol.evaluate(`document.getElementById('${verifyID}').textContent`)
+                        .done((response)=>{
+                            result = JSON.parse(response.result||"");
+                        });
+                    return result === verifyText;
                 },
                 "relatedDocuments.done.received",
-                2000
+                2000,
+                50
             );
         }
 
@@ -334,24 +347,33 @@ define(function (require, exports, module) {
 
             // add a class
             curDoc.replaceRange("addClass ", {line: 11, ch: 22});
-            let testId = testWindow.document.getElementById("panel-live-preview-frame")
-                .contentDocument.getElementById("testId");
+            let hasClass;
             await awaitsFor(
                 function isClassChanged() {
-                    return testId.classList.contains("addClass");
+                    LiveDevProtocol.evaluate(`document.getElementById('testId').classList.contains("addClass")`)
+                        .done((response)=>{
+                            hasClass = JSON.parse(response.result||"");
+                        });
+                    return hasClass;
                 },
                 "replaceClass",
-                2000
+                2000,
+                50
             );
 
             // remove a class
             curDoc.replaceRange("", {line: 11, ch: 22}, {line: 11, ch: 31});
             await awaitsFor(
                 function isClassChanged() {
-                    return !testId.classList.contains("addClass");
+                    LiveDevProtocol.evaluate(`document.getElementById('testId').classList.contains("addClass")`)
+                        .done((response)=>{
+                            hasClass = JSON.parse(response.result||"");
+                        });
+                    return hasClass;
                 },
                 "replaceClass",
-                2000
+                2000,
+                50
             );
 
             await endPreviewSession();
@@ -372,24 +394,33 @@ define(function (require, exports, module) {
 
             // add an attribute
             curDoc.replaceRange(' hello="world" ', {line: 11, ch: 15});
-            let testId = testWindow.document.getElementById("panel-live-preview-frame")
-                .contentDocument.getElementById("testId");
+            let result;
             await awaitsFor(
                 function isAttributeAdded() {
-                    return testId.getAttribute("hello") === "world";
+                    LiveDevProtocol.evaluate(`document.getElementById('testId').getAttribute("hello")`)
+                        .done((response)=>{
+                            result = JSON.parse(response.result||"");
+                        });
+                    return result === "world";
                 },
                 "attribute add",
-                2000
+                2000,
+                50
             );
 
             // remove the attribute
             curDoc.replaceRange("", {line: 11, ch: 15}, {line: 11, ch: 30});
             await awaitsFor(
                 function isClassChanged() {
-                    return testId.getAttribute("hello") !== "world";
+                    LiveDevProtocol.evaluate(`document.getElementById('testId').getAttribute("hello")`)
+                        .done((response)=>{
+                            result = JSON.parse(response.result||"");
+                        });
+                    return result !== "world";
                 },
                 "attribute remove",
-                2000
+                2000,
+                50
             );
 
             await endPreviewSession();
@@ -428,7 +459,9 @@ define(function (require, exports, module) {
                 "icon_chevron.png", 1000);
             await awaits(300);
             iFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            expect(iFrame.src.endsWith("sub/icon_chevron.png")).toBeTrue();
+            let srcURL = new URL(iFrame.src);
+            expect(srcURL.pathname.endsWith("pageLoader.html")).toBeTrue();
+            expect(srcURL.searchParams.get("URL").endsWith("sub/icon_chevron.png")).toBeTrue();
 
             // now switch back to old file
             await _editFileAndVerifyLivePreview("simple1.html", {line: 11, ch: 45}, 'hello world ',
@@ -447,14 +480,14 @@ define(function (require, exports, module) {
 
             await awaits(300);
             let outerIFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            let iFrame = outerIFrame.contentDocument.getElementById("contentFrame");
-            expect(iFrame.src.endsWith("readme.md")).toBeTrue();
+            expect(outerIFrame.src.endsWith("LiveDevelopment-MultiBrowser-test-files/readme.md")).toBeTrue();
 
-            // check hrefs
-            let href = iFrame.contentDocument.getElementsByTagName("a")[0].href;
-            expect(href.endsWith("LiveDevelopment-MultiBrowser-test-files/readme.md#title-link")).toBeTrue();
-            href = iFrame.contentDocument.getElementsByTagName("img")[0].src;
-            expect(href.endsWith("LiveDevelopment-MultiBrowser-test-files/sub/icon_chevron.png")).toBeTrue();
+            // todo check hrefs in markdown. currently we do not have mechanism to exec code image and markdown previews
+            // in future we should do this check too.
+            // let href = iFrame.contentDocument.getElementsByTagName("a")[0].href;
+            // expect(href.endsWith("LiveDevelopment-MultiBrowser-test-files/readme.md#title-link")).toBeTrue();
+            // href = iFrame.contentDocument.getElementsByTagName("img")[0].src;
+            // expect(href.endsWith("LiveDevelopment-MultiBrowser-test-files/sub/icon_chevron.png")).toBeTrue();
 
             await endPreviewSession();
         }, 5000);
@@ -481,11 +514,32 @@ define(function (require, exports, module) {
 
             await awaits(300);
             let outerIFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            iFrame = outerIFrame.contentDocument.getElementById("contentFrame");
-            expect(iFrame.src.endsWith("sub/icon_chevron.png")).toBeTrue();
+            let srcURL = new URL(outerIFrame.src);
+            expect(srcURL.pathname.endsWith("pageLoader.html")).toBeTrue();
+            expect(srcURL.searchParams.get("URL").endsWith("sub/icon_chevron.png")).toBeTrue();
 
             await endPreviewSession();
         }, 5000);
+
+        async function forRemoteExec(script, compareFn) {
+            let result;
+            await awaitsFor(
+                function isClassChanged() {
+                    LiveDevProtocol.evaluate(script)
+                        .done((response)=>{
+                            result = JSON.parse(response.result||"");
+                        });
+                    if(compareFn){
+                        return compareFn(result);
+                    }
+                    // just exec and return if no compare function is specified
+                    return true;
+                },
+                "awaitRemoteExec",
+                2000,
+                50
+            );
+        }
 
         it("should live highlight html elements", async function () {
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
@@ -495,20 +549,19 @@ define(function (require, exports, module) {
             await waitsForLiveDevelopmentToOpen();
             let editor = EditorManager.getActiveEditor();
             editor.setCursorPos({ line: 0, ch: 0 });
-            let highlights = iFrame.contentDocument.getElementsByClassName("__brackets-ld-highlight");
-            expect(highlights.length).toBe(0);
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result)=>{
+                return result === 0;
+            });
 
             editor.setCursorPos({ line: 11, ch: 10 });
 
-            await awaitsFor(
-                function isHilighted() {
-                    highlights = iFrame.contentDocument.getElementsByClassName("__brackets-ld-highlight");
-                    return highlights.length === 1;
-                },
-                "hilighted",
-                2000
-            );
-            expect(highlights[0].trackingElement.id).toBe("testId");
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result)=>{
+                return result === 1;
+            });
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight")[0].trackingElement.id`,
+                (result)=>{
+                    return result === 'testId';
+                });
 
             await endPreviewSession();
         }, 5000);
@@ -516,11 +569,11 @@ define(function (require, exports, module) {
         it("should live highlight css classes highlight all elements", async function () {
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple2.html"]),
                 "SpecRunnerUtils.openProjectFiles simple2.html", 1000);
-            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
 
             await waitsForLiveDevelopmentToOpen();
-            let highlights = iFrame.contentDocument.getElementsByClassName("__brackets-ld-highlight");
-            expect(highlights.length).toBe(0);
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result)=>{
+                return result === 0;
+            });
 
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.css"]),
                 "simple1.css", 1000);
@@ -528,9 +581,14 @@ define(function (require, exports, module) {
             editor.setCursorPos({ line: 2, ch: 6 });
 
             await awaits(300);
-            highlights = iFrame.contentDocument.getElementsByClassName("__brackets-ld-highlight");
-            expect(highlights.length).toBe(3);
-            expect(highlights[0].trackingElement.classList[0]).toBe("testClass");
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result)=>{
+                return result === 3;
+            });
+            await forRemoteExec(
+                `document.getElementsByClassName("__brackets-ld-highlight")[0].trackingElement.classList[0]`,
+                (result)=>{
+                    return result === 'testClass';
+                });
 
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(["import1.css"]),
                 "import1.css", 1000);
@@ -538,9 +596,14 @@ define(function (require, exports, module) {
             editor.setCursorPos({ line: 0, ch: 1 });
 
             await awaits(300);
-            highlights = iFrame.contentDocument.getElementsByClassName("__brackets-ld-highlight");
-            expect(highlights.length).toBe(2);
-            expect(highlights[0].trackingElement.classList[0]).toBe("testClass2");
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result)=>{
+                return result === 2;
+            });
+            await forRemoteExec(
+                `document.getElementsByClassName("__brackets-ld-highlight")[0].trackingElement.classList[0]`,
+                (result)=>{
+                    return result === 'testClass2';
+                });
 
             await endPreviewSession();
         }, 5000);
@@ -552,21 +615,32 @@ define(function (require, exports, module) {
 
             await waitsForLiveDevelopmentToOpen();
             let editor = EditorManager.getActiveEditor();
-            let highlights = iFrame.contentDocument.getElementsByClassName("__brackets-ld-highlight");
-            expect(highlights.length).toBe(0);
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result)=>{
+                return result === 0;
+            });
 
             editor.setCursorPos({ line: 11, ch: 10 });
 
             await awaits(300);
-            highlights = iFrame.contentDocument.getElementsByClassName("__brackets-ld-highlight");
-            expect(highlights.length).toBe(1);
-            let originalWidth = highlights[0].style.width;
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result)=>{
+                return result === 1;
+            });
+            let originalWidth;
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight")[0].style.width`, (result)=>{
+                originalWidth = result;
+                return true;
+            });
+
             iFrame.style.width = "100px";
             await awaits(100);
-            expect(highlights[0].style.width).not.toBe(originalWidth);
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight")[0].style.width`, (result)=>{
+                return originalWidth !== result;
+            });
             iFrame.style.width = "100%";
             await awaits(100);
-            expect(highlights[0].style.width).toBe(originalWidth);
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight")[0].style.width`, (result)=>{
+                return originalWidth === result;
+            });
 
             await endPreviewSession();
         }, 5000);
@@ -574,20 +648,24 @@ define(function (require, exports, module) {
         it("should reverse highlight on clicking on live preview", async function () {
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
                 "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
-            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
 
             await waitsForLiveDevelopmentToOpen();
             let editor = EditorManager.getActiveEditor();
 
             await awaits(500);
-            let highlights = iFrame.contentDocument.getElementsByClassName("__brackets-ld-highlight");
-            expect(highlights.length).toBe(0);
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result)=>{
+                return result === 0;
+            });
+            await forRemoteExec(`document.getElementById("testId2").click()`);
 
-            iFrame.contentDocument.getElementById("testId2").click();
             await awaits(500);
-            highlights = iFrame.contentDocument.getElementsByClassName("__brackets-ld-highlight");
-            expect(highlights.length).toBe(1);
-            expect(highlights[0].trackingElement.id).toBe("testId2");
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result)=>{
+                return result === 1;
+            });
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight")[0].trackingElement.id`,
+                (result)=>{
+                    return result === 'testId2';
+                });
             expect(editor.getCursorPos()).toEql({ line: 12, ch: 0, sticky: null });
 
             await endPreviewSession();
@@ -601,13 +679,14 @@ define(function (require, exports, module) {
             await waitsForLiveDevelopmentToOpen();
 
             await awaits(300);
-            let highlights = iFrame.contentDocument.getElementsByClassName("__brackets-ld-highlight");
-            expect(highlights.length).toBe(0);
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result)=>{
+                return result === 0;
+            });
 
             await awaitsForDone(CommandManager.execute(Commands.FILE_CLOSE_ALL, { _forceClose: true }),
                 "closing all file");
 
-            iFrame.contentDocument.getElementById("testId2").click();
+            await forRemoteExec(`document.getElementById("testId2").click()`);
 
             await awaits(300);
             // The live previewed file should now be opened in the editor
@@ -615,12 +694,16 @@ define(function (require, exports, module) {
             expect(editor.document.file.fullPath.endsWith("simple1.html")).toBeTrue();
 
             // live highlights should still work
-            iFrame.contentDocument.getElementById("testId").click();
+            await forRemoteExec(`document.getElementById("testId").click()`);
             await awaits(300);
 
-            highlights = iFrame.contentDocument.getElementsByClassName("__brackets-ld-highlight");
-            expect(highlights.length).toBe(1);
-            expect(highlights[0].trackingElement.id).toBe("testId");
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result)=>{
+                return result === 1;
+            });
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight")[0].trackingElement.id`,
+                (result)=>{
+                    return result === 'testId';
+                });
             expect(editor.getCursorPos()).toEql({ line: 11, ch: 0, sticky: null });
 
             await endPreviewSession();
@@ -633,22 +716,24 @@ define(function (require, exports, module) {
             await waitsForLiveDevelopmentToOpen();
             await _editFileAndVerifyLivePreview("simple1.html", {line: 11, ch: 45}, 'hello world ',
                 "testId", "Brackets is hello world awesome!");
-            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            expect(iFrame.contentDocument.savePageCtrlSDisabledByPhoenix).toBeTrue();
+            await forRemoteExec(`document.savePageCtrlSDisabledByPhoenix`, (result)=>{
+                return result === true;
+            });
 
-            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["readme.md"]),
-                "readme.md", 1000);
-            await awaits(300);
-            iFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            expect(iFrame.src.endsWith("readme.md")).toBeTrue();
-            expect(iFrame.contentDocument.savePageCtrlSDisabledByPhoenix).toBeTrue();
-
-            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["sub/icon_chevron.png"]),
-                "icon_chevron.png", 1000);
-            await awaits(300);
-            iFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            expect(iFrame.src.endsWith("sub/icon_chevron.png")).toBeTrue();
-            expect(iFrame.contentDocument.savePageCtrlSDisabledByPhoenix).toBeTrue();
+            // todo: currently we do not have mechanism to exec code image and markdown previews. enable in future.
+            // await awaitsForDone(SpecRunnerUtils.openProjectFiles(["readme.md"]),
+            //     "readme.md", 1000);
+            // await awaits(300);
+            // iFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            // expect(iFrame.src.endsWith("readme.md")).toBeTrue();
+            // expect(iFrame.contentDocument.savePageCtrlSDisabledByPhoenix).toBeTrue();
+            //
+            // await awaitsForDone(SpecRunnerUtils.openProjectFiles(["sub/icon_chevron.png"]),
+            //     "icon_chevron.png", 1000);
+            // await awaits(300);
+            // iFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            // expect(iFrame.src.endsWith("sub/icon_chevron.png")).toBeTrue();
+            // expect(iFrame.contentDocument.savePageCtrlSDisabledByPhoenix).toBeTrue();
 
             await endPreviewSession();
         }, 5000);
@@ -660,8 +745,6 @@ define(function (require, exports, module) {
             await waitsForLiveDevelopmentToOpen();
             await _editFileAndVerifyLivePreview("simple1.html", {line: 11, ch: 45}, 'hello world ',
                 "testId", "Brackets is hello world awesome!");
-            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            expect(iFrame.contentDocument.savePageCtrlSDisabledByPhoenix).toBeTrue();
 
             let editor = EditorManager.getActiveEditor();
             await BeautificationManager.beautifyEditor(editor);
@@ -674,6 +757,55 @@ define(function (require, exports, module) {
 
             await _editFileAndVerifyLivePreview("simple1.html", {line: 11, ch: 45}, 'hello world ',
                 "testId", "Brackets is hello world awesome!");
+
+            await endPreviewSession();
+        }, 5000);
+
+        it("should live preview not be able to access a non project file", async function () {
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["exploit1.html"]),
+                "SpecRunnerUtils.openProjectFiles exploit1.html", 1000);
+
+            await waitsForLiveDevelopmentToOpen();
+            await forRemoteExec(`document.fetchedText`, (result)=>{
+                return result && result.startsWith("Security Warning from phcode.dev<br><br>");
+            });
+
+            await endPreviewSession();
+        }, 5000);
+
+        it("should live preview rememberScrollPositions", async function () {
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["longPage.html"]),
+                "SpecRunnerUtils.openProjectFiles longPage.html", 1000);
+
+            await waitsForLiveDevelopmentToOpen();
+            // scroll to middile of page element so that the scroll position is saved
+            await forRemoteExec(`document.getElementById("midLine").scrollIntoView();`);
+            let sessionStorageSavedScrollPos, savedWindowScrollY;
+            await forRemoteExec(`window.scrollY`, (result)=>{
+                savedWindowScrollY = result;
+                return result && result !== 0;
+            });
+            await forRemoteExec(`sessionStorage.getItem("saved-scroll-" + location.href)`, (result)=>{
+                sessionStorageSavedScrollPos = result;
+                return !!result;
+            });
+            sessionStorageSavedScrollPos = JSON.parse(sessionStorageSavedScrollPos);
+            expect(sessionStorageSavedScrollPos.scrollY).toBe(savedWindowScrollY);
+
+            // now switch to a different page, its scroll position should not the saved scroll pos of last page
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
+            await waitsForLiveDevelopmentToOpen();
+            await forRemoteExec(`window.scrollY`, (result)=>{
+                return result !== savedWindowScrollY;
+            });
+
+            // now switch back to old page and verify if the scroll position was restored
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["longPage.html"]),
+                "SpecRunnerUtils.openProjectFiles longPage.html", 1000);
+            await forRemoteExec(`window.scrollY`, (result)=>{
+                return result === savedWindowScrollY;
+            });
 
             await endPreviewSession();
         }, 5000);
