@@ -19,7 +19,7 @@
  *
  */
 
-/*global describe, beforeEach, afterEach, it, expect, awaitsForDone */
+/*global describe, beforeAll, beforeEach, afterEach, it, expect, awaitsForDone */
 
 define(function (require, exports, module) {
 
@@ -46,6 +46,10 @@ define(function (require, exports, module) {
             return FileSystem.getFileForPath(testPath + "/" + name);
         };
 
+        beforeAll(async function () {
+            await SpecRunnerUtils.createTestWindowAndRun({forceReload: true});
+        }, 30000);
+
         beforeEach(async function () {
             testWindow = await SpecRunnerUtils.createTestWindowAndRun();
             _$ = testWindow.$;
@@ -60,7 +64,7 @@ define(function (require, exports, module) {
             FileSystem      = testWindow.brackets.test.FileSystem;
             Dialogs         = testWindow.brackets.test.Dialogs;
             await SpecRunnerUtils.loadProjectInTestWindow(testPath);
-        });
+        }, 30000);
 
         afterEach(async function () {
             MainViewManager._closeAll(MainViewManager.ALL_PANES);
@@ -72,7 +76,7 @@ define(function (require, exports, module) {
             ProjectManager  = null;
             FileSystem      = null;
             await SpecRunnerUtils.closeTestWindow();
-        });
+        }, 30000);
 
         describe("Opening and closing Images", function () {
             it("should open an image", async function () {

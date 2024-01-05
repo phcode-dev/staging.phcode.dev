@@ -1,0 +1,2 @@
+define(function(require,exports,module){if(!Phoenix.browser.isTauri)return;const UTILS_NODE_CONNECTOR="ph_utils",NodeConnector=require("NodeConnector"),utilsConnector=NodeConnector.createNodeConnector("ph_utils",exports);async function fetchURLText(url,encoding){const{buffer:buffer}=await utilsConnector.execPeer("getURLContent",{url:url});return iconv.decode(Buffer.from(buffer),encoding)}exports.fetchURLText=fetchURLText});
+//# sourceMappingURL=NodeUtils.js.map

@@ -27,7 +27,7 @@ define(function (require, exports, module) {
     var SpecRunnerUtils            = require("spec/SpecRunnerUtils");
 
 
-    describe("integration:CSS Parsing Integration Tests", function () {
+    describe("LegacyInteg:CSS Parsing Integration Tests", function () {
         // todo not working
 
         let testPath = SpecRunnerUtils.getTestPath("/spec/CSSUtils-test-files"),
@@ -51,7 +51,7 @@ define(function (require, exports, module) {
             DocumentManager     = null;
             FileViewController  = null;
             await SpecRunnerUtils.closeTestWindow();
-        });
+        }, 30000);
 
         afterEach(function () {
             testWindow.closeAllFiles();

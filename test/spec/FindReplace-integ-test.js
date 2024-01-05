@@ -67,7 +67,7 @@ define(function (require, exports, module) {
         return sels;
     }
 
-    describe("search:FindReplace - Integration", function () {
+    describe("LegacyInteg:FindReplace - Integration", function () {
 
         var LINE_FIRST_REQUIRE = 2;
         var CH_REQUIRE_START = 14;
@@ -166,7 +166,7 @@ define(function (require, exports, module) {
         async function waitsForSearchBarClose() {
             await awaitsFor(function () {
                 return getSearchBar().length === 0;
-            }, 1000, "search bar closing");
+            },  "search bar closing");
         }
         async function waitsForSearchBarReopen() {
             // If Find is invoked again while a previous Find bar is already up, we want to
@@ -174,7 +174,7 @@ define(function (require, exports, module) {
             // which modal bar to look at.
             await awaitsFor(function () {
                 return getSearchBar().length === 1;
-            }, 1000, "search bar reopening");
+            },  "search bar reopening");
         }
 
         function enterSearchText(str) {
@@ -230,7 +230,7 @@ define(function (require, exports, module) {
             await SpecRunnerUtils.closeTestWindow();
 
             await SpecRunnerUtils.removeTempDirectory();
-        });
+        }, 30000);
 
         beforeEach(async function () {
             await awaitsForDone(twCommandManager.execute(Commands.FILE_NEW_UNTITLED));

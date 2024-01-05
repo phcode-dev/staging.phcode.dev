@@ -1,6 +1,3 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
-  "http://www.w3.org/TR/html4/loose.dtd">
-
 <!--
   Copyright (c) 2021 - present core.ai . All rights reserved.
   Original work Copyright (c) 2012 - 2021 Adobe Systems Incorporated. All rights reserved.
@@ -25,12 +22,126 @@
 
 <html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>Jasmine Spec Runner</title>
-
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: asset: https://asset.localhost localhost:* ws://localhost:* https://storage.googleapis.com https://platform.twitter.com https://buttons.github.io https://unpkg.com/@aicore/ https://www.googletagmanager.com;
+           img-src * data: localhost:* asset: https://asset.localhost ;
+           media-src * data: localhost:* asset: https://asset.localhost ;
+           font-src * data: localhost:* asset: https://asset.localhost ;
+           frame-src * localhost:* asset: https://asset.localhost ;
+           connect-src * localhost:* asset: https://asset.localhost ;">
   <script type="text/javascript">
-    //brackets.app.showDeveloperTools();
-    console.warn('Make sure to run this following command before starting tests : npm run zipTestFiles ');
+    if(location.href.startsWith("tauri://") || location.href.startsWith('https://tauri.localhost')){
+      const errorMessage = `You should use custom protocol phtauri:// instead of tauri protocol ${location.href} .`;
+      alert(errorMessage);
+      console.error(errorMessage);
+      throw new Error(errorMessage);
+    }
+    console.warn('Make sure to run this following command before starting tests : npm run build ');
+    if(window.__TAURI__) {
+      window.testRunnerLogToConsole = function (...args) {
+        const message = args.join(' ');
+        __TAURI__.invoke('console_log', { message }).catch(e=>{
+          console.error("Failed to console_log to tauri console", e);
+        });
+      };
+      window.testRunnerErrorToConsole = function (...args) {
+        const message = args.join(' ');
+        __TAURI__.invoke('console_error', { message }).catch(e=>{
+          console.error("Failed to console_error to tauri console", e);
+        });
+      }
+      testRunnerLogToConsole(`Tauri test reporters attached.`);
+    }
+
+    // in playwright tests, testRunnerLogToConsole is injected by playwright runners
+
+    let pendingConsoleLogs = [];
+    let pendingConsoleErrors = [];
+
+    function _drainPendingLogs() {
+      // this is needed in playwright as playwright attached testRunnerLogToConsole in a differed manner.
+      // so we might get logs to put to console before playwright attaches the logger. No impact in tauri.
+      if(!window.testRunnerLogToConsole || !window.testRunnerErrorToConsole){
+        return;
+      }
+      for(let i=0; i<pendingConsoleLogs.length; i++){
+        const {args} = pendingConsoleLogs[i];
+        window.testRunnerLogToConsole(...args);
+      }
+      pendingConsoleLogs = [];
+
+      for(let i=0; i<pendingConsoleErrors.length; i++){
+        const {args} = pendingConsoleErrors[i];
+        window.testRunnerErrorToConsole(...args);
+      }
+      pendingConsoleErrors = [];
+      clearInterval(_darinPendingLogsIntervalTimer);
+    }
+    let _darinPendingLogsIntervalTimer = setInterval(_drainPendingLogs, 1000);
+
+    window.globalTestRunnerLogToConsole = function(...args) {
+      console.log(...args);
+      if(window.testRunnerLogToConsole) {
+        window.testRunnerLogToConsole(...args);
+      } else {
+        pendingConsoleLogs.push({args});
+      }
+    }
+
+    window.globalTestRunnerErrorToConsole = function (...args) {
+      console.error(...args);
+      if(window.testRunnerErrorToConsole) {
+        window.testRunnerErrorToConsole(...args);
+      } else {
+        pendingConsoleErrors.push({args});
+      }
+    }
+
+    window.globalTestRunnerLogToConsole("Test run URL is: ", location.href);
+
+    if(window.__TAURI__) {
+      function setupTauriBootVars() {
+        // this is used by storage.js (window.PhStore) to restore our persistent storage layer in tauri.
+        window._tauriStorageRestorePromise = window.__TAURI__.fs.readTextFile(
+                "storageDB/storageDBDump.json", { dir: window.__TAURI__.fs.BaseDirectory.AppLocalData })
+                .catch(err =>{
+                  console.error("First boot detected or Failed to init storage from cache." +
+                          " If first boot, ignore this error", err);
+                });
+        const appNamePromise = window.__TAURI__.app.getName();
+        // for running tests, the user document dir is set to app data dir as we dont want to
+        // corrupt user documents dir for tests
+        const documentDirPromise = window.__TAURI__.path.appLocalDataDir();
+        const appLocalDirPromise =  window.__TAURI__.path.appLocalDataDir();
+        const tempDirPromise = window.__TAURI__.os.tempdir();
+        window._tauriBootVars = {};
+        const tauriBootStartTime = Date.now();
+        window._tauriBootVarsPromise = Promise.all([appNamePromise, documentDirPromise,
+          appLocalDirPromise, tempDirPromise])
+                .then((results) => {
+                  window._tauriBootVars.appname = results[0];
+                  // For tests, documents dir is localAppDataDir/documents to keep user documents garbage free for tests
+                  // Also In github actions, the tauri get doc dir call gets stuck indefinitely
+                  window._tauriBootVars.documentDir = results[1];
+                  if(!window._tauriBootVars.documentDir.endsWith(window.__TAURI__.path.sep)){
+                    window._tauriBootVars.documentDir = window._tauriBootVars.documentDir + window.__TAURI__.path.sep;
+                  }
+                  window._tauriBootVars.documentDir = `${window._tauriBootVars.documentDir}documents${window.__TAURI__.path.sep}`;
+                  //Documents dir special case for tests
+                  window._tauriBootVars.appLocalDir = results[2];
+                  window._tauriBootVars.tempDir = results[3];
+                  window._tauriBootVars.bootstrapTime = Date.now() - tauriBootStartTime;
+                });
+      }
+      setupTauriBootVars();
+    }
   </script>
+
+  <!-- Import the phoenix browser virtual file system -->
+  <script src="../src/phoenix/virtualfs.js"></script>
+  <script src="../src/utils/EventDispatcher.js"></script>
 
   <script>
     // environment setup for boot. do not move out of index html!!
@@ -46,6 +157,31 @@
         // eslint-disable-next-line
         (function(a){if(/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows ce|xda|xiino|android|ipad|playbook|silk/i.test(a)||/1207|6310|6590|3gso|4thp|50[1-6]i|770s|802s|a wa|abac|ac(er|oo|s\-)|ai(ko|rn)|al(av|ca|co)|amoi|an(ex|ny|yw)|aptu|ar(ch|go)|as(te|us)|attw|au(di|\-m|r |s )|avan|be(ck|ll|nq)|bi(lb|rd)|bl(ac|az)|br(e|v)w|bumb|bw\-(n|u)|c55\/|capi|ccwa|cdm\-|cell|chtm|cldc|cmd\-|co(mp|nd)|craw|da(it|ll|ng)|dbte|dc\-s|devi|dica|dmob|do(c|p)o|ds(12|\-d)|el(49|ai)|em(l2|ul)|er(ic|k0)|esl8|ez([4-7]0|os|wa|ze)|fetc|fly(\-|_)|g1 u|g560|gene|gf\-5|g\-mo|go(\.w|od)|gr(ad|un)|haie|hcit|hd\-(m|p|t)|hei\-|hi(pt|ta)|hp( i|ip)|hs\-c|ht(c(\-| |_|a|g|p|s|t)|tp)|hu(aw|tc)|i\-(20|go|ma)|i230|iac( |\-|\/)|ibro|idea|ig01|ikom|im1k|inno|ipaq|iris|ja(t|v)a|jbro|jemu|jigs|kddi|keji|kgt( |\/)|klon|kpt |kwc\-|kyo(c|k)|le(no|xi)|lg( g|\/(k|l|u)|50|54|\-[a-w])|libw|lynx|m1\-w|m3ga|m50\/|ma(te|ui|xo)|mc(01|21|ca)|m\-cr|me(rc|ri)|mi(o8|oa|ts)|mmef|mo(01|02|bi|de|do|t(\-| |o|v)|zz)|mt(50|p1|v )|mwbp|mywa|n10[0-2]|n20[2-3]|n30(0|2)|n50(0|2|5)|n7(0(0|1)|10)|ne((c|m)\-|on|tf|wf|wg|wt)|nok(6|i)|nzph|o2im|op(ti|wv)|oran|owg1|p800|pan(a|d|t)|pdxg|pg(13|\-([1-8]|c))|phil|pire|pl(ay|uc)|pn\-2|po(ck|rt|se)|prox|psio|pt\-g|qa\-a|qc(07|12|21|32|60|\-[2-7]|i\-)|qtek|r380|r600|raks|rim9|ro(ve|zo)|s55\/|sa(ge|ma|mm|ms|ny|va)|sc(01|h\-|oo|p\-)|sdk\/|se(c(\-|0|1)|47|mc|nd|ri)|sgh\-|shar|sie(\-|m)|sk\-0|sl(45|id)|sm(al|ar|b3|it|t5)|so(ft|ny)|sp(01|h\-|v\-|v )|sy(01|mb)|t2(18|50)|t6(00|10|18)|ta(gt|lk)|tcl\-|tdg\-|tel(i|m)|tim\-|t\-mo|to(pl|sh)|ts(70|m\-|m3|m5)|tx\-9|up(\.b|g1|si)|utst|v400|v750|veri|vi(rg|te)|vk(40|5[0-3]|\-v)|vm40|voda|vulc|vx(52|53|60|61|70|80|81|83|85|98)|w3c(\-| )|webc|whit|wi(g |nc|nw)|wmlb|wonu|x700|yas\-|your|zeto|zte\-/i.test(a.substr(0,4))) check = true;})(navigator.userAgent||navigator.vendor||window.opera);
         return check;
+      }
+
+      function detectEngine() {
+        const userAgent = navigator.userAgent;
+
+        if (/WebKit/.test(userAgent)) {
+          if (/Chrome|Blink|Edg\//.test(userAgent)) {
+            return 'Blink';  // Chrome or Edge (based on Blink)
+          } else {
+            return 'WebKit'; // Likely Safari or other true WebKit-based browser
+          }
+        }
+
+        return 'Other';
+      }
+
+      window._getPlatformOverride = function (){
+        const currentUrl = window.location.href;
+        const searchParams = new URLSearchParams(new URL(currentUrl).search);
+        const platform = searchParams.get('platform');
+        const allowedOverRides = ['win', 'mac', 'linux'];
+        if(allowedOverRides.includes(platform)){
+          return platform;
+        }
+        return null;
       }
       function getBrowserDetails() {
         let isChrome = navigator.userAgent.indexOf("Chrome") !== -1;
@@ -81,7 +217,9 @@
             isChrome: isChromeBrowser,
             isEdgeChromium: isEdgeChromiumBrowser,
             isOperaChromium: isOperaChromiumBrowser,
-            isSafari: isSafari()
+            isSafari: isSafari(),
+            isWebKit: detectEngine() === 'WebKit',
+            isBlink: detectEngine() === 'Blink'
           }
         };
       }
@@ -101,18 +239,26 @@
         const isSpecRunnerWindow = window.location.pathname.endsWith("/SpecRunner.html");
         return isTestPhoenixWindow || isSpecRunnerWindow;
       }
+      function _isTestWindowPlaywright() {
+        return  !!(new window.URLSearchParams(window.location.search || "")).get("playwrightTests");
+      }
       // Determine OS/platform
       let platform = "win";
-      if (navigator.platform && navigator.platform.match("Mac")) {
+      if(window._getPlatformOverride() && _isTestWindow()){
+        console.warn("using platform override: ", platform);
+        platform = window._getPlatformOverride();
+      } else if (navigator.platform && navigator.platform.match("Mac")) {
         platform = "mac";
       } else if (navigator.platform && navigator.platform.indexOf("Linux") >= 0) {
         platform = "linux";
       }
       window.Phoenix = {
+        PHOENIX_INSTANCE_ID: "PH-" + Math.round( Math.random()*1000000000000),
         browser: getBrowserDetails(),
         platform,
         baseURL: _getBaseURL(),
         isTestWindow: _isTestWindow(),
+        isTestWindowPlaywright: _isTestWindowPlaywright(),
         firstBoot: false, // will be set below
         startTime: Date.now(),
         TRUSTED_ORIGINS: {
@@ -121,6 +267,11 @@
           'http://localhost:8000': true, // phcode dev server
           'http://localhost:8001': true, // phcode dev live preview server
           'http://localhost:5000': true, // playwright tests
+          'http://127.0.0.1:8000': true, // phcode dev server
+          'http://127.0.0.1:8001': true, // phcode dev live preview server
+          'http://127.0.0.1:5000': true, // playwright tests
+          'phtauri://localhost': true, // tauri prod app
+          'https://phtauri.localhost': true, // tauri
           'https://phcode.live': true, // phcode prod live preview server
           'https://phcode.dev': true,
           'https://dev.phcode.dev': true,
@@ -128,7 +279,9 @@
           'https://create.phcode.dev': true
         }
       };
-      Phoenix.isSupportedBrowser = Phoenix.browser.isDeskTop && ("serviceWorker" in navigator);
+      window.Phoenix.TRUSTED_ORIGINS[location.origin] = true;
+      Phoenix.isSupportedBrowser = Phoenix.browser.isTauri ||
+              (Phoenix.browser.isDeskTop && ("serviceWorker" in navigator));
       window.testEnvironment = window.Phoenix.isTestWindow;
 
       // now setup PhoenixBaseURL, which if of the form https://phcode.dev/ or tauri://localhost/
@@ -146,13 +299,13 @@
     }());
   </script>
 
-  <!-- Import the phoenix browser virtual file system -->
-  <script src="../src/phoenix/virtualfs.js"></script>
   <script src="../src/phoenix/shell.js" type="module"></script>
   <script src="virtual-server-loader.js" type="module"></script>
+  <script src="../src/node-loader.js"></script>
+  <script src="../src/storage.js"></script>
 
-  <link href="thirdparty/bootstrap2/css/bootstrap.min.css" rel="stylesheet">
-  <link href="thirdparty/bootstrap2/css/bootstrap-responsive.min.css" rel="stylesheet">
+  <link href="../src/thirdparty/bootstrap/bootstrap.min.css" rel="stylesheet">
+  <link href="../src/thirdparty/bootstrap/bootstrap-grid.min.css" rel="stylesheet">
   <link href="BootstrapReporterView.css" rel="stylesheet">
 
   <!-- Pre-load third party scripts that cannot be async loaded. -->
@@ -167,7 +320,7 @@
   </script>
   <link rel="stylesheet/less" type="text/css" href="../src/styles/brackets.less">
   <script src="../src/thirdparty/less.min.js"></script>
-  <script src="thirdparty/bootstrap2/js/bootstrap.min.js"></script>
+  <script src="../src/thirdparty/bootstrap/bootstrap.min.js"></script>
 
   <script src="thirdparty/jasmine-core/jasmine.js"></script>
   <script src="thirdparty/jasmine-core/jasmine-html.js"></script>
@@ -201,12 +354,134 @@
     tr:nth-child(even) {
       background-color: #dddddd;
     }
+
+    #phoenixIframeContainer {
+      z-index: 1;
+      position: absolute;
+      right: 10px;
+      bottom: 40px;
+      width: 1366px;
+      height: 900px;
+    }
+
+    .phoenixIframe{
+      width: 100%;
+      height: 100%;
+    }
+
+    #phoenixIframeContainer.hovered {
+      opacity: 0.5;
+    }
+
+    #phoenixControlBar{
+      display: flex;
+      justify-content: end;
+      background-color: darkslateblue;
+    }
   </style>
+
+  <script>
+
+    function openIframeRunner(pageURL) {
+      _disposeIframeRunner();
+
+      let iframe = document.createElement('iframe');
+      iframe.src = pageURL;
+      iframe.className = "phoenixIframe";
+
+      let container = document.getElementById('phoenixIframeContainer');
+      container.classList.remove("forced-hidden");
+      container.insertBefore(iframe, container.firstChild);
+      return iframe;
+    }
+    function closeIframeRunner() {
+      _disposeIframeRunner();
+      document.getElementById("phoenixIframeContainer").classList.add("forced-hidden");
+    }
+
+    function _reloadIframeRunner() {
+      _disposeIframeRunner();
+      let container = document.getElementById('phoenixIframeContainer');
+      let existingIframes = container.getElementsByClassName('phoenixIframe');
+      let iframe = document.createElement('iframe');
+
+      if (existingIframes.length > 0) {
+        iframe.src = existingIframes[0].src;
+      } else {
+        iframe.src = "../src";
+      }
+
+      iframe.className = "phoenixIframe";
+      container.insertBefore(iframe, container.firstChild);
+    }
+
+    function _disposeIframeRunner() {
+      let container = document.getElementById('phoenixIframeContainer');
+      let iframes = container.querySelectorAll('iframe.phoenixIframe');
+
+      iframes.forEach(iframe => {
+        iframe.remove();
+      });
+    }
+
+    function init() {
+      const controlBar = document.getElementById("phoenixControlBar");
+      const iframeContainer = document.getElementById("phoenixIframeContainer");
+
+      controlBar.addEventListener('mouseover', function() {
+        iframeContainer.classList.add('hovered');
+      });
+
+      controlBar.addEventListener('mouseout', function() {
+        iframeContainer.classList.remove('hovered');
+      });
+
+      const simulateOS = document.getElementById("os-select");
+      if(Phoenix.browser.isTauri) {
+        // only available in browsers
+        simulateOS.classList.add("forced-hidden")
+      } else {
+        const platform = window._getPlatformOverride();
+        if(platform){
+          simulateOS.value = platform;
+          document.getElementById("all").setAttribute('href', `?category=all&platform=${platform}`);
+          document.getElementById("unit").setAttribute('href', `?category=unit&platform=${platform}`);
+          document.getElementById("integration").setAttribute('href', `?category=integration&platform=${platform}`);
+          document.getElementById("LegacyInteg").setAttribute('href', `?category=LegacyInteg&platform=${platform}`);
+          document.getElementById("livepreview").setAttribute('href', `?category=livepreview&platform=${platform}`);
+          document.getElementById("mainview").setAttribute('href', `?category=mainview&platform=${platform}`);
+          document.getElementById("performance").setAttribute('href', `?category=performance&platform=${platform}`);
+          document.getElementById("extension").setAttribute('href', `?category=extension&platform=${platform}`);
+          document.getElementById("individualrun").setAttribute('href', `?category=individualrun&platform=${platform}`);
+        }
+        simulateOS.addEventListener('change', function() {
+          const selectedPlatform = this.value;
+          const currentUrl = new URL(window.location.href);
+          // Manually construct the query string. we cant use `currentUrl.searchParams.set` due to + encoding to %20
+          let queryString = '';
+          currentUrl.search.slice(1).split('&').forEach(paramEqValStr => {
+            const [key] = paramEqValStr.split('=');
+            if (key !== 'platform') {
+              queryString += `${paramEqValStr}&`;
+            }
+          });
+
+          const allowedOverRides = ['win', 'mac', 'linux'];
+          if(allowedOverRides.includes(selectedPlatform)){
+            queryString += `platform=${selectedPlatform}`;
+          }
+
+          window.location.href = `${currentUrl.origin}${currentUrl.pathname}?${queryString}`;
+        });
+      }
+    }
+
+  </script>
 </head>
 
-<body style="user-select: text !important; display: flex">
-    <div class="navbar navbar-fixed-top">
-      <div class="navbar-inner">
+<body style="user-select: text !important; display: flex" onload="init()">
+    <div class="navbar navbar-fixed-top" style="padding-top: 0;">
+      <div class="navbar-inner" style="width: 100%;">
         <div class="container" style="width: 100%;">
           <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
             <span class="icon-bar"></span>
@@ -220,7 +495,7 @@
               <li><a id="all" href="?category=all">All</a></li>
               <li><a id="unit" href="?category=unit">Unit</a></li>
               <li><a id="integration" href="?category=integration">Integration</a></li>
-              <li><a id="search" href="?category=search">Find Replace</a></li>
+              <li><a id="LegacyInteg" href="?category=LegacyInteg">LegacyInteg</a></li>
               <li><a id="livepreview" href="?category=livepreview">Live&nbsp;Preview</a></li>
               <li><a id="mainview"    href="?category=mainview">Main&nbsp;View</a></li>
               <li><a id="performance" href="?category=performance">Performance</a></li>
@@ -229,6 +504,13 @@
               <li><a id="reload" href="#">Reset and Reload Tests</a></li>
               <li><a id="show-report-to-copy" href="#">Toggle Printable Report</a></li>
             </ul>
+            <select name="Simulate OS" id="os-select" style="width: 100px;">
+              <option value="Simulate OS: None">Simulate OS</option>
+              <option value="none">None</option>
+              <option value="win">Windows</option>
+              <option value="linux">Linux</option>
+              <option value="mac">Mac</option>
+            </select>
           </div>
         </div>
       </div>
@@ -239,8 +521,17 @@
       <button id="copyFullReportButton"> Copy Full Report</button>
     </div>
     <div id="loading" style="display: none; margin-top: 100px;">
-      Please run <code>npm run zipTestFiles</code> before starting tests at least once or if you are facing issues.
+      Please run <code>npm run build</code> before starting tests at least once or if you are facing issues.
       </p>Extracting test files <span id="loadProgressMessage"></span>.... <img src="../src/styles/images/throbber.gif" alt=".......">
+    </div>
+    <div id="phoenixIframeContainer" class="forced-hidden">
+      <div id="phoenixControlBar">
+        <button onclick="_reloadIframeRunner()">Reload</button>
+        &nbsp;&nbsp;&nbsp;
+        <button onclick="_disposeIframeRunner()">Dispose</button>
+        &nbsp;&nbsp;&nbsp;
+        <button onclick="closeIframeRunner()">x</button>
+      </div>
     </div>
     <div id="mock-main-view" style="position:absolute; height:1000px; width:1000px; left:-10000px; top:-10000px;"></div>
     <div id="toast-notification-container">

@@ -708,7 +708,8 @@ img {
     height: 46px;
     width: 44px;
     transition: all .3s ease-in-out;
-    transform: translateY(8px);
+    -webkit-backface-visibility: hidden;
+    -webkit-transform: translateZ(0) scale(1.0, 1.0);
 }
 
 .project-type-list li a span {
@@ -730,7 +731,8 @@ img {
 }
 
 .project-type-list li a:hover img {
-    transform: translateY(0px);
+    transform: translateY(-8px);
+    -webkit-backface-visibility: hidden;
 }
 
 .project-type-list li a:hover span {
@@ -816,15 +818,41 @@ img {
     color: #FFFFFF;
 }
 
-.recent-project-list li a {
+.recent-project-list li {
     padding: 6px 10px;
     border-radius: 3px;
-    transition: all .3s ease-in-out;
     background: transparent;
+    overflow: hidden;
 }
 
-.recent-project-list li a:hover {
+.recent-project-list li:hover {
     background: #3F3F3F;
+    cursor: pointer;
+}
+
+.recent-project-metadata {
+    color: #8A8A8A;
+    font-size: 11px;
+    overflow: hidden;
+}
+
+.marquee {
+    animation: marquee 6.5s infinite linear; /* notice the infinite */
+    animation-play-state: paused;
+}
+
+.recent-project-list li:hover .marquee{
+    animation-play-state: running;
+    animation-fill-mode: forwards;
+}
+
+@keyframes marquee{
+    0% {
+        transform: translateX(0%)
+    }
+    100% {
+        transform: translateX(-100%)
+    }
 }
 
 .remove-btn {
@@ -1067,4 +1095,54 @@ img {
     opacity: 1;
     transition: opacity 0.5s ease;
     transition-delay:0.2s;
+}
+
+.settings-icon {
+    color: #D0D0D0;
+}
+
+/* The container <div> - needed to position the dropdown content */
+.dropdown {
+    position: absolute;
+    right: 25px;
+    bottom: 20px;
+}
+
+.dropbtn {
+    width: 25px;
+    height: 25px;
+    padding: 1px;
+    text-align: center;
+}
+
+.dropbtn:hover {
+    background: #202020;
+}
+
+.dropbtnActive {
+    background: #202020;
+    border: 1px solid #202020;
+}
+
+/* Dropdown Content (Hidden by Default) */
+.dropdown-content {
+    display: none;
+    position: relative;
+    background-color: #121314;
+    min-width: 100px;
+    z-index: 1;
+}
+
+/* Links inside the dropdown */
+.dropdown-content div {
+    color: white;
+    padding: 3px 5px;
+    text-decoration: none;
+    text-align: left;
+}
+
+/* Change color of dropdown links on hover */
+.dropdown-content div:hover {
+    background-color: #284160;
+    cursor: default;
 }

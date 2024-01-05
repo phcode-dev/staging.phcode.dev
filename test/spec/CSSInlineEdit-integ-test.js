@@ -30,7 +30,7 @@ define(function (require, exports, module) {
     var testPath = SpecRunnerUtils.getTestPath("/spec/CSSInlineEdit-test-files");
 
     // TODO: overlaps a lot with MultiRangeInlineEditor-test integration suite
-    describe("integration:CSS Inline Edit", function () {
+    describe("LegacyInteg:CSS Inline Edit", function () {
 
         var testWindow,
             brackets,
@@ -44,7 +44,7 @@ define(function (require, exports, module) {
             Dialogs;
 
         beforeAll(async function () {
-            testWindow = await SpecRunnerUtils.createTestWindowAndRun();
+            testWindow = await SpecRunnerUtils.createTestWindowAndRun({forceReload: true});
             $ = testWindow.$;
             brackets = testWindow.brackets;
             EditorManager = brackets.test.EditorManager;
@@ -67,8 +67,8 @@ define(function (require, exports, module) {
             Dialogs = null;
             FileSystem = null;
             testWindow = null;
-            //await SpecRunnerUtils.closeTestWindow();
-        });
+            await SpecRunnerUtils.closeTestWindow();
+        }, 30000);
 
         function dropdownButton() {
             return $(".btn.btn-dropdown.btn-mini.stylesheet-button");

@@ -75,6 +75,7 @@ html, body {
     color: @bc-text-link !important;
     text-decoration-color: @bc-text-link;
     text-decoration-thickness: 2px;
+    text-decoration-skip-ink: none;
     pointer-events: auto;
     cursor: pointer;
 }
@@ -99,6 +100,7 @@ html, body {
     text-decoration-line: underline;
     text-decoration-color: @error-underline-text;
     text-decoration-thickness: 1px;
+    text-decoration-skip-ink: none;
 }
 
 .editor-text-fragment-warn{
@@ -106,6 +108,7 @@ html, body {
     text-decoration-line: underline;
     text-decoration-color: @warn-underline-text;
     text-decoration-thickness: 1px;
+    text-decoration-skip-ink: none;
 }
 
 .editor-text-fragment-info{
@@ -113,6 +116,7 @@ html, body {
     text-decoration-line: underline;
     text-decoration-color: @info-underline-text;
     text-decoration-thickness: 1px;
+    text-decoration-skip-ink: none;
 }
 
 .editor-text-fragment-spell-error{
@@ -120,14 +124,11 @@ html, body {
     text-decoration-line: underline;
     text-decoration-color: @spell-underline-text;
     text-decoration-thickness: 1px;
+    text-decoration-skip-ink: none;
 }
 
 .hidden-element{
     display: none !important;
-}
-
-.subpixel-aa{
-    -webkit-font-smoothing: subpixel-antialiased;
 }
 
 .resizing-container {
@@ -2575,76 +2576,8 @@ label input {
 }
 
 /* Extension Manager */
-#install-drop-zone {
-    background-color: transparent;
-    box-shadow: initial;
-    font-weight: normal;
-    border-style: dashed;
-    position: relative;
-
-    .dark & {
-        border-color: #5f5f5f;
-    }
-}
-
-#install-drop-zone .install-from-url {
-    cursor: pointer;
-}
-
-#install-drop-zone-mask {
-    position: absolute;
-    top: -1px;
-    left: -1px;
-
-    padding: 1px;
-    width: 100%;
-    height: 100%;
-    display: none;
-
-    cursor: copy;
-}
-
-#install-drop-zone.drop #install-drop-zone-mask {
-    display: block;
-}
-
-#install-drop-zone.drop {
-    background: @bc-primary-btn-bg;
-    box-shadow: initial;
-    font-weight: normal;
-    border: 1px solid @bc-primary-btn-bg;
-    color: @bc-text-alt;
-    text-shadow: none;
-
-    .dark & {
-        background: @dark-bc-primary-btn-bg;
-        border: 1px solid @dark-bc-primary-btn-bg;
-        color: @dark-bc-text-alt;
-    }
-}
-
-.install-drag-message {
-    display: none;
-}
-
-.install-drop-message {
-    display: none;
-}
-
 .install-validating-message {
     display: none;
-}
-
-#install-drop-zone.drag .install-drag-message {
-    display: inline;
-}
-
-#install-drop-zone.drop .install-drop-message {
-    display: inline;
-}
-
-#install-drop-zone.validating .install-validating-message {
-    display: inline;
 }
 
 #hidden-editors {

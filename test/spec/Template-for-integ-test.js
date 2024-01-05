@@ -40,6 +40,8 @@ define(function (require, exports, module) {
     describe("integration:Template for integration tests", function () {
 
         beforeAll(async function () {
+            // do not use force option in brackets core integration tests. Tests are assumed to reuse the existing
+            // test window instance for fast runs.
             testWindow = await SpecRunnerUtils.createTestWindowAndRun();
             brackets            = testWindow.brackets;
             FileViewController  = brackets.test.FileViewController;
@@ -51,16 +53,16 @@ define(function (require, exports, module) {
             await SpecRunnerUtils.loadProjectInTestWindow(testPath);
         }, 30000);
 
-        afterAll(function () {
+        afterAll(async function () {
             FileViewController  = null;
             ProjectManager      = null;
             testWindow = null;
             brackets = null;
             // comment out below line if you want to debug the test window post running tests
-            SpecRunnerUtils.closeTestWindow();
-        });
+            await SpecRunnerUtils.closeTestWindow();
+        }, 30000);
 
-        it("Should open file in project", async function () { // #2813
+        it("Should open file in project", async function () {
             await awaitsForDone(
                 FileViewController.openAndSelectDocument(
                     testPath + "/simple.js",
@@ -72,7 +74,7 @@ define(function (require, exports, module) {
                 "closing all file");
         });
 
-        it("Should open file in project and add to working set", async function () { // #2813
+        it("Should open file in project and add to working set", async function () {
             await awaitsForDone(FileViewController.openFileAndAddToWorkingSet(testPath + "/edit.js"));
             const selected = MainViewManager.findInAllWorkingSets(testPath + "/edit.js");
             expect(selected.length >= 1 ).toBe(true);

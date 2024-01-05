@@ -37,7 +37,9 @@ function getRoute(){
     return `${basePath}/phoenix/vfs`;
 }
 
-window.fsServerUrl = window.location.origin + getRoute() + "/";
+if(!window.__TAURI__) {
+    window.fsServerUrl = window.location.origin + getRoute() + "/";
+}
 
 function serverReady() {
     console.log(`Server ready! Serving files on url: ${window.location.origin + getRoute()}`);
@@ -50,7 +52,7 @@ function serverInstall() {
 /**
  * Register the nohost service worker, passing `route` or other options.
  */
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && !window.__TAURI__) {
     console.log(window.location.href);
 
     const wb = new Workbox(`virtual-server-test.js?route=${getRoute()}`);

@@ -19,7 +19,7 @@
  *
  */
 
-/*global describe, it, expect, afterEach, awaitsFor, awaitsForDone, beforeAll, afterAll, awaits */
+/*global describe, it, expect, afterEach, awaitsFor, awaitsForDone, beforeAll, afterAll, awaits, Phoenix */
 
 define(function (require, exports, module) {
 
@@ -34,7 +34,7 @@ define(function (require, exports, module) {
         _                   = require("thirdparty/lodash");
 
 
-    describe("integration:ProjectManager", function () {
+    describe("LegacyInteg:ProjectManager", function () {
 
         var testPath = SpecRunnerUtils.getTestPath("/spec/ProjectManager-test-files"),
             tempDir  = SpecRunnerUtils.getTempDirectory(),
@@ -49,7 +49,7 @@ define(function (require, exports, module) {
 
             await awaitsForDone(SpecRunnerUtils.rename(tempDir + "/git/", tempDir + "/.git/"), "move files");
 
-            testWindow = await SpecRunnerUtils.createTestWindowAndRun();
+            testWindow = await SpecRunnerUtils.createTestWindowAndRun({forceReload: true});
 
             // Load module instances from brackets.test
             brackets       = testWindow.brackets;
@@ -58,7 +58,7 @@ define(function (require, exports, module) {
             FileSystem     = testWindow.brackets.test.FileSystem;
 
             await SpecRunnerUtils.loadProjectInTestWindow(tempDir);
-        });
+        }, 30000);
 
         afterAll(async function () {
             testWindow     = null;
@@ -67,7 +67,7 @@ define(function (require, exports, module) {
             CommandManager = null;
             await SpecRunnerUtils.closeTestWindow();
             await SpecRunnerUtils.removeTempDirectory();
-        });
+        }, 30000);
 
         afterEach(function () {
             testWindow.closeAllFiles();
@@ -78,7 +78,7 @@ define(function (require, exports, module) {
             await awaitsFor(function () {
                 $dlg = testWindow.$(".modal.instance");
                 return $dlg.length > 0;
-            }, 300, "dialog to appear");
+            },  "dialog to appear");
         }
 
         describe("createNewItem", function () {
@@ -509,6 +509,10 @@ define(function (require, exports, module) {
         });
 
         describe("Project, file and folder download", function () {
+            if(Phoenix.browser.isTauri) {
+                it("Not tested: download project is not present desktop local file system", async function () {});
+                return;
+            }
             it("should download project command work", async function () {
                 let restore = testWindow.saveAs;
                 let blob, name;

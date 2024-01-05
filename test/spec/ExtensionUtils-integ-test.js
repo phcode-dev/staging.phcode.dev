@@ -30,41 +30,42 @@ define(function (require, exports, module) {
         LESS_RESULT         = require("text!spec/ExtensionUtils-test-files/less.text");
 
 
-    describe("integration:Extension Utils", function () {
+    describe("LegacyInteg:Extension Utils", function () {
 
         var testWindow;
 
+        async function loadStyleSheet(path) {
+            var deferred = new $.Deferred();
+
+            // attach style sheet
+            var promise = ExtensionUtils.loadStyleSheet(module, path);
+            let result;
+            promise.then((res)=>{
+                result = res;
+                deferred.resolve();
+            }, deferred.reject);
+            await awaitsForDone(promise, "loadStyleSheet: " + path);
+
+            return result;
+        }
+
         beforeAll(async function () {
-            testWindow = await SpecRunnerUtils.createTestWindowAndRun();
+            testWindow = await SpecRunnerUtils.createTestWindowAndRun({forceReload: true});
             // Load module instances from brackets.test
             ExtensionUtils      = testWindow.brackets.test.ExtensionUtils;
-        });
+        }, 30000);
 
         afterAll(async function () {
+            await loadStyleSheet("ExtensionUtils-test-files/basic.css");
             testWindow      = null;
             ExtensionUtils  = null;
             await SpecRunnerUtils.closeTestWindow();
-        });
+        }, 30000);
 
         describe("loadStyleSheet", function () {
 
-            async function loadStyleSheet(doc, path) {
-                var deferred = new $.Deferred();
-
-                // attach style sheet
-                var promise = ExtensionUtils.loadStyleSheet(module, path);
-                let result;
-                promise.then((res)=>{
-                    result = res;
-                    deferred.resolve();
-                }, deferred.reject);
-                await awaitsForDone(promise, "loadStyleSheet: " + path);
-
-                return result;
-            }
-
             it("should load CSS style sheets with imports", async function () {
-                await loadStyleSheet(testWindow.document, "ExtensionUtils-test-files/basic.css");
+                await loadStyleSheet("ExtensionUtils-test-files/basic.css");
 
                 // basic.css
                 var $projectTitle = testWindow.$("#project-title");
@@ -85,14 +86,14 @@ define(function (require, exports, module) {
             });
 
             it("should detect errors loading the initial path", async function () {
-                var path    = "ExtensionUtils-test-files/does-not-exist.css",
+                var path    = "https://a.path.that.doesnt.exist/ExtensionUtils-test-files/does-not-exist.css",
                     promise = ExtensionUtils.loadStyleSheet(module, path);
 
                 await awaitsForFail(promise, "loadStyleSheet: " + path);
             });
 
             it("should detect errors loading imports", async function () {
-                var path    = "ExtensionUtils-test-files/bad-import.css",
+                var path    = "https://a.path.that.doesnt.exist/ExtensionUtils-test-files/does-not-exist.css",
                     promise = ExtensionUtils.loadStyleSheet(module, path);
 
                 await awaitsForFail(promise, "loadStyleSheet: " + path);
@@ -101,7 +102,7 @@ define(function (require, exports, module) {
             it("should attach LESS style sheets", async function () {
                 var result;
 
-                result =await loadStyleSheet(testWindow.document, "ExtensionUtils-test-files/basic.less");
+                result =await loadStyleSheet("ExtensionUtils-test-files/basic.less");
 
                 // convert all line endings to platform default
                 var windowText = FileUtils.translateLineEndings(testWindow.$(result).text()),
@@ -121,7 +122,7 @@ define(function (require, exports, module) {
                     bracketsLocation = indexLocation.substring(0, indexLocation.length - "src/".length),
                     basicLessLocation = bracketsLocation + "test/spec/ExtensionUtils-test-files/basic.less";
 
-                result =await loadStyleSheet(testWindow.document, basicLessLocation);
+                result =await loadStyleSheet(basicLessLocation);
 
                 // convert all line endings to platform default
                 var windowText = FileUtils.translateLineEndings(testWindow.$(result).text()),

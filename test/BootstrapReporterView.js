@@ -92,13 +92,13 @@ define(function (require, exports, module) {
 
         // build DOM immediately
         var container = $(
-            '<div id="interactiveReport" class="container-fluid" style="height: 95%; overflow: scroll; width: 100%;">' +
-                '<div class="row-fluid">' +
-                    '<div class="span4">' +
-                        '<ul id="suite-list" class="nav nav-pills nav-stacked">' +
+            '<div id="interactiveReport" class="container-fluid" style="overflow: scroll; width: 100%;">' +
+                '<div class="row">' +
+                    '<div class="col-md-4">' +
+                        '<ul id="suite-list" class="nav nav-pills flex-column">' +
                         '</ul>' +
                     '</div>' +
-                    '<div id="results-container" class="span8">' +
+                    '<div id="results-container" class="col-md-8">' +
                     '</div>' +
                 '</div>' +
                 '</div>'
@@ -133,7 +133,8 @@ define(function (require, exports, module) {
                 displayName = suiteName.replace(`${category[0]}:`, '');
             }
         }
-        let hyperlink = `?spec=${encodeURIComponent(suiteName)}`;
+        const platformQueryParam = window._getPlatformOverride() ? `&platform=${window._getPlatformOverride()}` : '';
+        let hyperlink = `?spec=${encodeURIComponent(suiteName)}${platformQueryParam}`;
         if(reporter.selectedCategories.length){
             hyperlink = `${hyperlink}&category=${reporter.selectedCategories.join(',')}`;
         }
@@ -162,7 +163,8 @@ define(function (require, exports, module) {
                 displayName = suiteName.replace(`${category[0]}:`, '');
             }
         }
-        let hyperlink = `?spec=${encodeURIComponent(suiteName)}`;
+        const platformQueryParam = window._getPlatformOverride() ? `&platform=${window._getPlatformOverride()}` : '';
+        let hyperlink = `?spec=${encodeURIComponent(suiteName)}${platformQueryParam}`;
         if(reporter.selectedCategories.length){
             hyperlink = `${hyperlink}&category=${reporter.selectedCategories.join(',')}`;
         }
@@ -244,7 +246,7 @@ define(function (require, exports, module) {
             } else {
                 this.$info.toggleClass("alert-error", true).text(
                     "Complete. See failures Below. If all tests have passed and no failures are seen below," +
-                    "Check the debug console for errors. (search for 'Spec Error:' in console)");
+                    "Check the debug console for errors. (search for 'Spec Error:' , 'Suite Error:' or Runner Error: in console)");
             }
             window.playWrightRunComplete = true;
         }
@@ -347,7 +349,8 @@ define(function (require, exports, module) {
             }
 
             // print spec name
-            let hyperlink = `?spec=${encodeURIComponent(specData.name)}`;
+            const platformQueryParam = window._getPlatformOverride() ? `&platform=${window._getPlatformOverride()}` : '';
+            let hyperlink = `?spec=${encodeURIComponent(specData.name)}${platformQueryParam}`;
             if(reporter.selectedCategories.length){
                 hyperlink = `${hyperlink}&category=${reporter.selectedCategories.join(',')}`;
             }
@@ -367,6 +370,7 @@ define(function (require, exports, module) {
 
                 specData.messages.forEach(function (message) {
                     errorSuiteData[specData.description].push(message);
+                    window.globalTestRunnerErrorToConsole(message);
                     // Render with clickable links if parent Brackets window available; plain text otherwise
                     if (window.opener) {
                         var htmlMessage = self._linkerizeStack(message);
@@ -385,7 +389,8 @@ define(function (require, exports, module) {
 
         if (specData.passed && specData.perf) {
             // add spec name
-            let hyperlink = `?spec=${encodeURIComponent(specData.name)}`;
+            const platformQueryParam = window._getPlatformOverride() ? `&platform=${window._getPlatformOverride()}` : '';
+            let hyperlink = `?spec=${encodeURIComponent(specData.name)}${platformQueryParam}`;
             if(reporter.selectedCategories.length){
                 hyperlink = `${hyperlink}&category=${reporter.selectedCategories.join(',')}`;
             }

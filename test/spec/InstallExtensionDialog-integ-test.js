@@ -30,21 +30,21 @@ define(function (require, exports, module) {
         FileSystem,
         Strings         = require("strings");
 
-    describe("integration:Install Extension Dialog", function () {
+    describe("LegacyInteg:Install Extension Dialog", function () {
         let testWindow, dialog, fields, closed,
             url = "https://brackets.io/extensions/myextension.zip";
 
         beforeAll(async function () {
-            testWindow = await SpecRunnerUtils.createTestWindowAndRun();
+            testWindow = await SpecRunnerUtils.createTestWindowAndRun({forceReload: true});
             // Load module instances from brackets.test
             FileSystem      = testWindow.brackets.test.FileSystem;
-        });
+        }, 30000);
 
         afterAll(async function () {
             testWindow = null;
             FileSystem = null;
             await SpecRunnerUtils.closeTestWindow();
-        });
+        }, 30000);
 
         afterEach(async function () {
             testWindow.brackets.config.extension_listing_url = brackets.config.extension_listing_url;

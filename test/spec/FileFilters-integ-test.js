@@ -33,7 +33,7 @@ define(function (require, exports, module) {
         Strings            = require("strings"),
         StringUtils        = require("utils/StringUtils");
 
-    describe("search: FileFilters", function () {
+    describe("LegacyInteg: FileFilters", function () {
 
         let testPath = SpecRunnerUtils.getTestPath("/spec/InlineEditorProviders-test-files"),
             testWindow,
@@ -68,7 +68,7 @@ define(function (require, exports, module) {
             FindInFilesUI = null;
             CommandManager = null;
             $ = null;
-            await SpecRunnerUtils.closeTestWindow();
+            await SpecRunnerUtils.closeTestWindow(true);
         }
 
         // These helper functions are slight variations of the ones in FindInFiles, so need to be
@@ -91,14 +91,14 @@ define(function (require, exports, module) {
         async function executeSearch(searchString) {
             await awaitsFor(function () {
                 return FindInFiles.isProjectIndexingComplete();
-            }, "Find in Files done", 10000);
+            }, "Find in Files done", 20000);
             FindInFiles._searchDone = false;
             let $searchField = $(".modal-bar #find-group input");
             $searchField.val(searchString).trigger("input");
             //SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_RETURN, "keydown", $searchField[0]);
             await awaitsFor(function () {
                 return FindInFiles._searchDone;
-            }, "Find in Files done", 10000);
+            }, "Find in Files done", 20000);
         }
 
         async function executeCleanSearch(searchString) {
@@ -109,7 +109,7 @@ define(function (require, exports, module) {
 
         describe("Find in Files filtering", function () {
             beforeAll(setupTestWindow, 30000);
-            afterAll(teardownTestWindow, 10000);
+            afterAll(teardownTestWindow, 30000);
 
             it("should search all files by default", async function () {
                 await openSearchBar();
@@ -117,7 +117,7 @@ define(function (require, exports, module) {
                 expect(FindInFiles.searchModel.results[testPath + "/test1.css"]).toBeTruthy();
                 expect(FindInFiles.searchModel.results[testPath + "/test1.html"]).toBeTruthy();
                 await closeSearchBar();
-            }, 10000);
+            }, 30000);
 
             // This finishes async, since clickDialogButton() finishes async (dialogs close asynchronously)
             async function setExcludeCSSFiles() {
@@ -132,23 +132,25 @@ define(function (require, exports, module) {
             it("should exclude files from search", async function () {
                 await openSearchBar();
                 await setExcludeCSSFiles();
+                await openSearchBar();
                 await executeCleanSearch("{1}");
                 // *.css should have been excluded this time
                 expect(FindInFiles.searchModel.results[testPath + "/test1.css"]).toBeFalsy();
                 expect(FindInFiles.searchModel.results[testPath + "/test1.html"]).toBeTruthy();
                 await closeSearchBar();
-            }, 10000);
+            }, 30000);
 
             it("should respect filter when searching folder", async function () {
                 let dirEntry = FileSystem.getDirectoryForPath(testPath);
                 await openSearchBar(dirEntry);
                 await setExcludeCSSFiles();
+                await openSearchBar(dirEntry);
                 await executeCleanSearch("{1}");
                 // *.css should have been excluded this time
                 expect(FindInFiles.searchModel.results[testPath + "/test1.css"]).toBeFalsy();
                 expect(FindInFiles.searchModel.results[testPath + "/test1.html"]).toBeTruthy();
                 await closeSearchBar();
-            }, 10000);
+            }, 30000);
 
             it("should ignore filter when searching a single file", async function () {
                 let fileEntry = FileSystem.getFileForPath(testPath + "/test1.css");
@@ -159,7 +161,7 @@ define(function (require, exports, module) {
                 await executeCleanSearch("{1}");
                 // ignore *.css exclusion since we're explicitly searching this file
                 expect(FindInFiles.searchModel.results[testPath + "/test1.css"]).toBeTruthy();
-            }, 10000);
+            }, 30000);
 
             it("should show error when filter excludes all files", async function () {
                 await openSearchBar();
@@ -184,7 +186,7 @@ define(function (require, exports, module) {
                 // Close search bar
                 let $searchField = $modalBar.find("#find-group input");
                 await SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", $searchField[0]);
-            }, 10000);
+            }, 30000);
 
             it("should respect filter when editing code", async function () {
                 await openSearchBar();
@@ -200,12 +202,12 @@ define(function (require, exports, module) {
                 await awaits(800);  // ensure _documentChangeHandler()'s timeout has time to run
                 expect(FindInFiles.searchModel.results[testPath + "/test1.css"]).toBeFalsy();  // *.css should still be excluded
                 expect(FindInFiles.searchModel.results[testPath + "/test1.html"]).toBeTruthy();
-            }, 10000);
+            }, 30000);
         });
 
         describe("Filter picker UI", function () {
             beforeAll(setupTestWindow, 30000);
-            afterAll(teardownTestWindow, 10000);
+            afterAll(teardownTestWindow, 30000);
 
             beforeEach(async function () {
                 await openSearchBar();

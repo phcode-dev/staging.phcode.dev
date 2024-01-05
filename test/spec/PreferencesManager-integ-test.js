@@ -31,19 +31,19 @@ define(function (require, exports, module) {
         PreferencesManager,
         testWindow;
 
-    describe("integration:PreferencesManager", function () {
+    describe("LegacyInteg:PreferencesManager", function () {
 
         beforeAll(async function () {
-            testWindow = await SpecRunnerUtils.createTestWindowAndRun();
+            testWindow = await SpecRunnerUtils.createTestWindowAndRun({forceReload: true});
             // Load module instances from brackets.test
             PreferencesManager = testWindow.brackets.test.PreferencesManager;
             await SpecRunnerUtils.loadProjectInTestWindow(testPath);
-        });
+        }, 30000);
 
         afterAll(async function () {
             PreferencesManager = null;
             await SpecRunnerUtils.closeTestWindow();
-        });
+        }, 30000);
 
         it("should find preferences in the project", async function () {
             var projectWithoutSettings = SpecRunnerUtils.getTestPath("/spec/WorkingSetView-test-files"),

@@ -27,7 +27,8 @@ define(function (require, exports, module) {
     require("utils/Global");
 
     // Load dependent modules
-    var SpecRunnerUtils     = require("spec/SpecRunnerUtils");
+    const SpecRunnerUtils     = require("spec/SpecRunnerUtils"),
+        Strings     = require("strings");
 
     var UTF8 = "utf8",
         UTF16 = "utf16";
@@ -104,6 +105,30 @@ define(function (require, exports, module) {
             expect(brackets.fs).toBeTruthy();
         });
 
+        it("should getDisplayLocation return correct path in browsers", function () {
+            // mount paths
+            expect(brackets.app.getDisplayLocation("/mnt/apple")).toBe("apple");
+            expect(brackets.app.getDisplayLocation("/mnt/apple/x/")).toBe("apple/x/");
+            // filer paths
+            expect(brackets.app.getDisplayLocation("/x/apple")).toBe(Strings.STORED_IN_YOUR_BROWSER);
+            expect(brackets.app.getDisplayLocation("/y/apple/x/")).toBe(Strings.STORED_IN_YOUR_BROWSER);
+        });
+
+        it("should getDisplayLocation return correct path in tauri", function () {
+            if(!Phoenix.browser.isTauri) {
+                return;
+            }
+            // tauri paths
+            if(brackets.platform === "win"){
+                expect(brackets.app.getDisplayLocation("/tauri/x")).toBe("x:\\");
+                expect(brackets.app.getDisplayLocation("/tauri/x/y")).toBe("x:\\y");
+                expect(brackets.app.getDisplayLocation("/tauri/x/y/d.txt")).toBe("x:\\y\\d.txt");
+            } else {
+                expect(brackets.app.getDisplayLocation("/tauri/apple")).toBe("/apple");
+                expect(brackets.app.getDisplayLocation("/tauri/apple/x/")).toBe("/apple/x/");
+            }
+        });
+
         describe("readdir", function () {
 
             it("should read a directory from disk", async function () {
@@ -130,9 +155,9 @@ define(function (require, exports, module) {
 
                 brackets.fs.readdir("/This/directory/doesnt/exist", cb);
 
-                await awaitsFor(function () { return cb.wasCalled; }, "readdir to finish", 1000);
+                await awaitsFor(function () { return cb.wasCalled; }, "readdir to finish");
 
-                expect(cb.error.code).toBe(brackets.fs.ERR_NOT_FOUND);
+                expect(cb.error.code).toBe(brackets.fs.ERR_CODES.ENOENT);
             });
 
             it("should return an error if invalid parameters are passed", function () {
@@ -175,17 +200,19 @@ define(function (require, exports, module) {
 
                 brackets.fs.stat("/This/directory/doesnt/exist", cb);
 
-                await awaitsFor(function () { return cb.wasCalled; }, "stat to finish", 1000);
+                await awaitsFor(function () { return cb.wasCalled; }, "stat to finish");
 
-                expect(cb.error.code).toBe(brackets.fs.ERR_NOT_FOUND);
+                expect(cb.error.code).toBe(brackets.fs.ERR_CODES.ENOENT);
             });
 
-            it("should return an error if incorrect parameters are passed", function () {
+            it("should return an error if incorrect parameters are passed", async function () {
                 var cb = statSpy();
 
-                expect(function () {
-                    brackets.fs.stat(42, cb);
-                }).toThrow();
+                brackets.fs.stat(42, cb);
+
+                await awaitsFor(function () { return cb.wasCalled; }, "stat to finish", 1000);
+
+                expect(cb.error.code).toBe(brackets.fs.ERR_CODES.EINVAL);
             });
 
         }); // describe("stat")
@@ -208,23 +235,26 @@ define(function (require, exports, module) {
 
                 brackets.fs.readFile("/This/file/doesnt/exist.txt", UTF8, cb);
 
-                await awaitsFor(function () { return cb.wasCalled; }, "readFile to finish", 1000);
+                await awaitsFor(function () { return cb.wasCalled; }, "readFile to finish");
 
-                expect(cb.error.code).toBe(brackets.fs.ERR_NOT_FOUND);
+                expect(cb.error.code).toBe(brackets.fs.ERR_CODES.ENOENT);
             });
 
             it("should return an error if trying to use an unsppported encoding", function () {
-                brackets.fs.readFile(testDir + "/file_one.txt", UTF16, (a, c)=>{
-                    expect(ArrayBuffer.isView(c)).toBe(true);
+                brackets.fs.readFile(testDir + "/file_one.txt", "NOT_AN_ENCODING", (e, c)=>{
+                    expect(e.code).toBe(brackets.fs.ERR_CODES.ECHARSET);
+                    expect(c).toBeUndefined();
                 });
             });
 
-            it("should return an error if called with invalid parameters", function () {
-                var cb = readFileSpy();
+            it("should readFile error if called with invalid parameters", async function () {
+                let cb = readFileSpy();
 
-                expect(function () {
-                    brackets.fs.readFile(42, [], cb);
-                }).toThrow();
+                brackets.fs.readFile(42, [], cb);
+
+                await awaitsFor(function () { return cb.wasCalled; },  "readFile to finish",  1000);
+
+                expect(cb.error.code).toBeDefined();
             });
 
             it("should return an error if trying to read a directory", async function () {
@@ -234,11 +264,11 @@ define(function (require, exports, module) {
 
                 await awaitsFor(function () { return cb.wasCalled; }, 1000);
 
-                expect(cb.error.code).toBe(brackets.fs.ERR_EISDIR);
+                expect(cb.error.code).toBe(brackets.fs.ERR_CODES.EISDIR);
             });
 
             it("should return an error trying to read a binary file", function () {
-                brackets.fs.readFile(testDir + "/tree.jpg", "bin", (a, c)=> {
+                brackets.fs.readFile(testDir + "/tree.jpg", "binary", (a, c)=> {
                     expect(ArrayBuffer.isView(c)).toBe(true);
                 });
             });
@@ -310,12 +340,14 @@ define(function (require, exports, module) {
                 expect(readFileCB.content).toBe(contents);
             });
 
-            it("should return an error if called with invalid parameters", function () {
+            it("should writeFile return an error if called with invalid parameters", async function () {
                 var cb = errSpy();
 
-                expect(function () {
-                    brackets.fs.writeFile(42, contents, 2, cb);
-                }).toThrow();
+                brackets.fs.writeFile(42, contents, "utf8", cb);
+
+                await awaitsFor(function () { return cb.wasCalled; },  "writeFile to finish",  1000);
+
+                expect(cb.error.code).toBeDefined();
             });
 
             it("should return an error if trying to write a directory", async function () {
@@ -366,7 +398,7 @@ define(function (require, exports, module) {
 
                 await awaitsFor(function () { return statCB.wasCalled; },  "stat to finish", 1000);
 
-                expect(statCB.error.code).toBe(brackets.fs.ERR_NOT_FOUND);
+                expect(statCB.error.code).toBe(brackets.fs.ERR_CODES.ENOENT);
             });
 
             it("should return an error if the file doesn't exist", async function () {
@@ -374,19 +406,19 @@ define(function (require, exports, module) {
 
                 brackets.fs.unlink("/This/file/doesnt/exist.txt", cb);
 
-                await awaitsFor(function () { return cb.wasCalled; },  "unlink to finish",  1000);
+                await awaitsFor(function () { return cb.wasCalled; },  "unlink to finish");
 
-                expect(cb.error.code).toBe(brackets.fs.ERR_NOT_FOUND);
+                expect(cb.error.code).toBe(brackets.fs.ERR_CODES.ENOENT);
             });
 
-            it("should return an error if called with invalid parameters", async function () {
+            it("should unlink return an error if called with invalid parameters", async function () {
                 var cb = errSpy();
 
                 brackets.fs.unlink(42, cb);
 
                 await awaitsFor(function () { return cb.wasCalled; }, "unlink to finish", 1000);
 
-                expect(cb.error.code).toBe(brackets.fs.ERR_EINVAL);
+                expect(cb.error.code).toBe(brackets.fs.ERR_CODES.EINVAL);
             });
 
             it("should remove a directory", async function () {
@@ -395,7 +427,7 @@ define(function (require, exports, module) {
                     statCB      = statSpy(),
                     unlinkCB    = errSpy();
 
-                brackets.fs.mkdir(delDirName, parseInt("777", 0), cb);
+                brackets.fs.mkdir(delDirName, 0o777, cb);
 
                 await awaitsFor(function () { return cb.wasCalled; }, "makeDir to finish");
 
@@ -422,7 +454,7 @@ define(function (require, exports, module) {
 
                 await awaitsFor(function () { return statCB.wasCalled; }, 1000, "stat to finish");
 
-                expect(statCB.error.code).toBe(brackets.fs.ERR_NOT_FOUND);
+                expect(statCB.error.code).toBe(brackets.fs.ERR_CODES.ENOENT);
             });
         }); // describe("unlink")
 
@@ -434,7 +466,7 @@ define(function (require, exports, module) {
                     statCB      = statSpy(),
                     trashCB     = errSpy();
 
-                brackets.fs.mkdir(newDirName, parseInt("777", 0), cb);
+                brackets.fs.mkdir(newDirName, 0o777, cb);
 
                 await awaitsFor(function () { return cb.wasCalled; }, "makedir to finish");
 
@@ -479,7 +511,7 @@ define(function (require, exports, module) {
 
                 await awaitsFor(function () { return statCB.wasCalled; }, "stat to finish", 1000);
 
-                expect(statCB.error.code).toBe(brackets.fs.ERR_NOT_FOUND);
+                expect(statCB.error.code).toBe(brackets.fs.ERR_CODES.ENOENT);
 
                 statCB = statSpy();
                 brackets.fs.stat(newName, statCB);
@@ -516,7 +548,7 @@ define(function (require, exports, module) {
 
                 await awaitsFor(function () { return statCB.wasCalled; }, "stat to finish", 1000);
 
-                expect(statCB.error.code).toBe(brackets.fs.ERR_NOT_FOUND);
+                expect(statCB.error.code).toBe(brackets.fs.ERR_CODES.ENOENT);
 
                 statCB = statSpy();
                 brackets.fs.stat(newName, statCB);
@@ -533,7 +565,7 @@ define(function (require, exports, module) {
 
                 expect(renameCB.error).toBe(null);
             });
-            it("should return an error if the new name already exists", async function () {
+            it("should rename return an error if the new name already exists", async function () {
                 var oldName = testDir + "/file_one.txt",
                     newName = testDir + "/file_two.txt",
                     cb      = errSpy();
@@ -544,7 +576,7 @@ define(function (require, exports, module) {
 
                 await awaitsFor(function () { return cb.wasCalled; }, "rename to finish", 1000);
 
-                expect(cb.error.code).toBe(brackets.fs.ERR_FILE_EXISTS);
+                expect(cb.error.code).toBe(brackets.fs.ERR_CODES.EEXIST);
             });
             // TODO: More testing of error cases?
         });
@@ -567,7 +599,7 @@ define(function (require, exports, module) {
 
                 await awaitsFor(function () { return statCB.wasCalled; }, "stat to finish", 1000);
 
-                expect(statCB.error.code).toBe(brackets.fs.ERR_NOT_FOUND);
+                expect(statCB.error.code).toBe(brackets.fs.ERR_CODES.ENOENT);
 
                 // Verify src file exist
                 brackets.fs.stat(fileName, statCBsrc);
@@ -611,15 +643,80 @@ define(function (require, exports, module) {
 
         describe("specialDirectories", function () {
             it("should have an application support directory", async function () {
-                expect(brackets.app.getApplicationSupportDirectory().length).not.toBe(0);
+                // these tests are here as these are absolute unchanging dir convention used by phoenix.
+                if(window.__TAURI__){
+                    const appSupportDIR = window.fs.getTauriVirtualPath(window._tauriBootVars.appLocalDir);
+                    expect(brackets.app.getApplicationSupportDirectory().startsWith("/tauri/")).toBeTrue();
+                    expect(brackets.app.getApplicationSupportDirectory()).toBe(appSupportDIR);
+                } else {
+                    expect(brackets.app.getApplicationSupportDirectory()).toBe('/fs/app/');
+                }
             });
             it("should have a user documents directory", function () {
-                expect(brackets.app.getUserDocumentsDirectory().length).not.toBe(0);
+                // these tests are here as these are absolute unchanging dir convention used by phoenix.
+                if(window.__TAURI__){
+                    const documentsDIR = window.fs.getTauriVirtualPath(window._tauriBootVars.documentDir);
+                    expect(brackets.app.getUserDocumentsDirectory().startsWith("/tauri/")).toBeTrue();
+                    expect(brackets.app.getUserDocumentsDirectory()).toBe(documentsDIR);
+                } else {
+                    expect(brackets.app.getUserDocumentsDirectory()).toBe('/fs/local/');
+                }
             });
-            it("should get virtual serving directory from virtual serving URL", async function () {
+            it("should have a user projects directory", function () {
+                // these tests are here as these are absolute unchanging dir convention used by phoenix.
+                if(window.__TAURI__){
+                    const documentsDIR = window.fs.getTauriVirtualPath(window._tauriBootVars.documentDir);
+                    const appName = window._tauriBootVars.appname;
+                    const userProjectsDir = `${documentsDIR}${appName}/`;
+                    expect(brackets.app.getUserProjectsDirectory().startsWith("/tauri/")).toBeTrue();
+                    expect(brackets.app.getUserProjectsDirectory()).toBe(userProjectsDir);
+                } else {
+                    expect(brackets.app.getUserProjectsDirectory()).toBe('/fs/local/');
+                }
+            });
+            it("should have a temp directory", function () {
+                // these tests are here as these are absolute unchanging dir convention used by phoenix.
+                if(window.__TAURI__){
+                    let tempDIR = window.fs.getTauriVirtualPath(window._tauriBootVars.tempDir);
+                    if(!tempDIR.endsWith("/")){
+                        tempDIR = `${tempDIR}/`;
+                    }
+                    const appName = window._tauriBootVars.appname;
+                    tempDIR = `${tempDIR}${appName}/`;
+                    expect(brackets.app.getTempDirectory().startsWith("/tauri/")).toBeTrue();
+                    expect(brackets.app.getTempDirectory()).toBe(tempDIR);
+                } else {
+                    expect(brackets.app.getTempDirectory()).toBe('/temp/');
+                }
+            });
+            it("should have extensions directory", function () {
+                // these tests are here as these are absolute unchanging dir convention used by phoenix.
+                if(window.__TAURI__){
+                    const appSupportDIR = window.fs.getTauriVirtualPath(window._tauriBootVars.appLocalDir);
+                    const extensionsDir = `${appSupportDIR}assets/extensions/`;
+                    expect(brackets.app.getExtensionsDirectory().startsWith("/tauri/")).toBeTrue();
+                    expect(brackets.app.getExtensionsDirectory()).toBe(extensionsDir);
+                } else {
+                    expect(brackets.app.getExtensionsDirectory()).toBe('/fs/app/extensions/');
+                }
+            });
+
+            it("should get virtual serving directory from virtual serving URL in browser", async function () {
+                if(window.__TAURI__){
+                    return;
+                }
                 expect(brackets.VFS.getPathForVirtualServingURL(`${window.fsServerUrl}blinker`)).toBe("/blinker");
                 expect(brackets.VFS.getPathForVirtualServingURL(`${window.fsServerUrl}path/to/file_x.mp3`))
                     .toBe("/path/to/file_x.mp3");
+                expect(brackets.VFS.getPathForVirtualServingURL("/some/path")).toBe(null);
+                expect(brackets.VFS.getPathForVirtualServingURL("/fs")).toBe(null);
+            });
+
+            it("should not get virtual serving directory from virtual serving URL in tauri", async function () {
+                if(!window.__TAURI__){
+                    return;
+                }
+                expect(window.fsServerUrl).not.toBeDefined();
                 expect(brackets.VFS.getPathForVirtualServingURL("/some/path")).toBe(null);
                 expect(brackets.VFS.getPathForVirtualServingURL("/fs")).toBe(null);
             });

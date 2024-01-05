@@ -21,6 +21,7 @@
 
 define(function (require, exports, module) {
 
+    require("spec/Tauri-platform-test");
     require("spec/utframework-suite-test");
     require("spec/Async-test");
     require("spec/CommandManager-test");
@@ -36,6 +37,7 @@ define(function (require, exports, module) {
     require("spec/EventDispatcher-test");
     require("spec/EventManager-test");
     require("spec/ExtensionInterface-test");
+    require("spec/ExtensionLoader-integ-test");
     require("spec/ExtensionLoader-test");
     require("spec/ExtensionManager-test");
     require("spec/FeatureGate-test");
@@ -101,13 +103,16 @@ define(function (require, exports, module) {
     require("spec/BeautificationManager-test");
     require("spec/Template-for-integ-test");
     require("spec/LiveDevelopmentMultiBrowser-test");
-    require("spec/PhoenixComm-integ-test");
     require("spec/NewFileContentManager-test");
     require("spec/InstallExtensionDialog-integ-test");
     require("spec/ExtensionInstallation-test");
     require("spec/NotificationUI-test");
+    require("spec/Storage-integ-test");
+    // Integrated extension tests
+    require("spec/InAppNotifications-integ-test");
+    // Node Tests
+    require("spec/NodeConnection-test");
     // todo TEST_MODERN
     // require("spec/LanguageTools-test"); LSP tests. disabled for now
-    // require("spec/NodeConnection-test"); deprecate and remove node connection
     // require("spec/Menu-native-integ-test"); evaluate after we have native menus in os installed builds
 });

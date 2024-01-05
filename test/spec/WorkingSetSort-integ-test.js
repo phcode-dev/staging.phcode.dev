@@ -93,12 +93,12 @@ define(function (require, exports, module) {
 
             // Wait for both files to be added to the working set
             await awaitsFor(function () { return workingSetListItemCount === 3; }, "workingSetListItemCount to equal 3", 1000);
-        });
+        }, 30000);
 
         afterAll(async function () {
             testWindow.closeAllFiles();
             await closeTestWindow();
-        });
+        }, 30000);
 
         it("should sort list by name", function () {
             // sort list by name

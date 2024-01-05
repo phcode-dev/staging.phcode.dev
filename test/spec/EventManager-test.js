@@ -45,7 +45,7 @@ define(function (require, exports, module) {
 
             await awaitsFor(function () {
                 return arg1 === 1 && arg2 === "param1";
-            }, 100, "awaiting event trigger");
+            }, "awaiting event trigger");
         });
 
         it("should receive event from embedded iframe", async function () {
@@ -53,7 +53,7 @@ define(function (require, exports, module) {
                 EVENT_NAME = "iframeHelloEvent",
                 TEST_MESSAGE = 'world';
             const SRC_DOC = `<html><head><script>
-                window.top.postMessage({
+                window.parent.postMessage({
                       handlerName: "${HANDLER_NAME}",
                       eventName: "${EVENT_NAME}",
                       message: {hello: "${TEST_MESSAGE}"}
@@ -71,7 +71,7 @@ define(function (require, exports, module) {
             document.body.appendChild(iframe);
             await awaitsFor(function () {
                 return !!recvdMessageEvent;
-            }, 100, "awaiting message event reception");
+            }, "awaiting message event reception");
             expect(recvdMessageEvent.data.handlerName).toBe(HANDLER_NAME);
             expect(recvdMessageEvent.data.eventName).toBe(EVENT_NAME);
             expect(recvdMessageEvent.data.message).toEql({hello: TEST_MESSAGE});

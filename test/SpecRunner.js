@@ -19,7 +19,8 @@
  *
  */
 
-/*global beforeEach, afterEach, beforeAll, afterAll, jasmine, Filer, Phoenix */
+/*global beforeEach, afterEach, beforeAll, afterAll, jasmine, Filer, Phoenix,
+globalTestRunnerLogToConsole, globalTestRunnerErrorToConsole */
 
 // Set the baseUrl to brackets/src
 require.config({
@@ -96,9 +97,19 @@ function jsPromise(jqueryOrJSPromise) {
     });
 }
 
+function _timeoutPromise(promise, ms, timeoutMessage = '') {
+    const timeout = new Promise((_, reject) => {
+        setTimeout(() => {
+            reject(new Error(timeoutMessage || `Promise timed out after ${ms}ms`));
+        }, ms);
+    });
+
+    return Promise.race([promise, timeout]);
+}
+
 /**
  * global test util to wait for a polling result.
- * @param pollFn return true to indicate sucess and break waiting.
+ * @param pollFn return true or a promise that resolves to true of false to indicate success and break waiting.
  * @param _message - unused
  * @param timeoutms - max timeout to wait for. if not given, will wait for 2 seconds
  * @param pollInterval in millis, default poll interval is 10ms
@@ -115,16 +126,25 @@ function awaitsFor(pollFn, _message, timeoutms = 2000, pollInterval = 10){
     return new Promise((resolve, reject)=>{
         let startTime = Date.now(),
             lapsedTime;
-        function pollingFn() {
+        async function pollingFn() {
             try{
-                if(pollFn()){
+                let result = pollFn();
+
+                // If pollFn returns a promise, await it
+                if (Object.prototype.toString.call(result) === "[object Promise]") {
+                    // we cant simply check for result instanceof Promise as the Promise may be returned from an iframe.
+                    // and iframe has a different instance of Promise than this spec runner.
+                    result = await _timeoutPromise(result, timeoutms, "awaitsFor timed out waiting for "+ _message);
+                }
+
+                if (result) {
                     resolve();
                     return;
                 }
                 lapsedTime = Date.now() - startTime;
                 if(lapsedTime>timeoutms){
-                    console.error("await timed out for", _message);
-                    reject();
+                    globalTestRunnerErrorToConsole("awaitsFor timed out waiting for", _message);
+                    reject("awaitsFor timed out waiting for", _message);
                     return;
                 }
                 setTimeout(pollingFn, pollInterval);
@@ -158,7 +178,7 @@ define(function (require, exports, module) {
 
 
     // Utility dependencies
-    var AppInit                 = require("utils/AppInit"),
+    const AppInit               = require("utils/AppInit"),
         SpecRunnerUtils         = require("spec/SpecRunnerUtils"),
         ExtensionLoader         = require("utils/ExtensionLoader"),
         Async                   = require("utils/Async"),
@@ -169,15 +189,17 @@ define(function (require, exports, module) {
         BootstrapReporterView   = require("test/BootstrapReporterView").BootstrapReporterView,
         NativeApp               = require("utils/NativeApp");
 
+    window.Strings = require("strings");
     // Load modules for later use
+    require("utils/EventDispatcher");
     require("language/CodeInspection");
     require("thirdparty/lodash");
     require("thirdparty/jszip");
-    require("utils/PhoenixComm");
     require("editor/CodeHintManager");
     require("utils/Global");
     require("command/Menus");
     require("utils/NodeDomain");
+    require("utils/NodeUtils");
     require("utils/ColorUtils");
     require("preferences/PreferencesBase");
     require("JSUtils/Session");
@@ -226,6 +248,9 @@ define(function (require, exports, module) {
 	//load language features
     require("features/ParameterHintsManager");
     require("features/JumpToDefManager");
+
+    //node connector
+    require("NodeConnector");
 
     var selectedCategories,
         params          = new UrlParams(),
@@ -399,6 +424,8 @@ define(function (require, exports, module) {
         selectedCategories = (params.get("category")
             || window.localStorage.getItem("SpecRunner.category") || "unit").split(",");
 
+        jasmine.DEFAULT_TIMEOUT_INTERVAL = 15000; // 15 seconds
+
         /*
          * TODO (jason-sanjose): extension unit tests should only load the
          * extension and the extensions dependencies. We should not load
@@ -475,9 +502,9 @@ define(function (require, exports, module) {
 
     function _copyZippedItemToFS(path, item) {
         return new Promise((resolve, reject) =>{
-            let destPath = `/test/${path}`;
+            let destPath = `${SpecRunnerUtils.getTestPath()}/${path}`;
             if(item.dir){
-                window.fs.mkdirs(destPath, '777', true, (err)=>{
+                window.fs.mkdirs(destPath, 0o777, true, (err)=>{
                     if(err){
                         reject();
                     } else {
@@ -502,8 +529,8 @@ define(function (require, exports, module) {
 
     function makeTestDir() {
         return new Promise((resolve, reject)=>{
-            let testPath = `/test/`;
-            window.fs.mkdirs(testPath, '777', true, (err)=>{
+            let testPath = SpecRunnerUtils.getTestPath();
+            window.fs.mkdirs(testPath, 0o777, true, (err)=>{
                 if(err){
                     reject();
                 } else {
@@ -513,35 +540,45 @@ define(function (require, exports, module) {
         });
     }
 
-    function setupAndRunTests() {
+    async function setupAndRunTests() {
+        globalTestRunnerLogToConsole("Starting tests...");
+        await window._tauriBootVarsPromise;
+        await window.PhStore.storageReadyPromise;
         let shouldExtract = localStorage.getItem(EXTRACT_TEST_ASSETS_KEY);
         if(shouldExtract === EXTRACT || shouldExtract === null) {
             _showLoading(true);
             let JSZip = require("thirdparty/jszip");
+            globalTestRunnerLogToConsole("Extracting Test Files");
             window.JSZipUtils.getBinaryContent('test_folders.zip', function(err, data) {
                 if(err) {
-                    alert("Please run 'npm run zipTestFiles' before starting this test. " +
+                    globalTestRunnerErrorToConsole("Please run 'npm run build' before starting this test. " +
                         "Could not create test files in phoenix virtual fs. Some tests may fail");
                     _showLoading(false);
                     init();
                 } else {
                     JSZip.loadAsync(data).then(function (zip) {
                         let keys = Object.keys(zip.files);
-                        let destPath = `/test/`;
-                        console.log("Cleaning test directory: /test/");
+                        let destPath = SpecRunnerUtils.getTestPath();
+                        globalTestRunnerLogToConsole("Cleaning test directory: " + destPath);
                         window.fs.unlink(destPath, async function (err) {
                             if(err && err.code !== 'ENOENT'){
                                 console.error("Could not clean test dir. we will try to move ahead", err);
                                 // we will now try to overwrite existing
                             }
-                            console.log("Creating test folder /test/");
+                            globalTestRunnerLogToConsole("Creating test folder " + destPath);
                             await makeTestDir();
-                            console.log("Copying test assets to /test/", err);
+                            globalTestRunnerLogToConsole("Copying test assets to " + destPath);
                             let progressMessageEl = document.getElementById("loadProgressMessage");
+                            let lastPrintedPercent = 0;
                             for (let i = 0; i < keys.length; i++) {
                                 let path = keys[i];
                                 progressMessageEl.textContent = `${i+1} of ${keys.length}`;
                                 await _copyZippedItemToFS(path, zip.files[path]);
+                                const percentCopied = Math.round((i/keys.length)*100);
+                                if(percentCopied % 10 === 0 && lastPrintedPercent !== percentCopied) {
+                                    lastPrintedPercent = percentCopied;
+                                    globalTestRunnerLogToConsole(percentCopied+ "% copied");
+                                }
                             }
                             localStorage.setItem(EXTRACT_TEST_ASSETS_KEY, DONT_EXTRACT);
                             _showLoading(false);

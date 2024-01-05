@@ -33,14 +33,14 @@ define(function (require, exports, module) {
         MainViewManager,     // loaded from brackets.test
         SpecRunnerUtils     = require("spec/SpecRunnerUtils");
 
-    describe("integration:Document Integration", function () {
+    describe("LegacyInteg:Document Integration", function () {
 
         var testPath = SpecRunnerUtils.getTestPath("/spec/Document-test-files"),
             testWindow,
             $;
 
         beforeAll(async function () {
-            testWindow = await SpecRunnerUtils.createTestWindowAndRun();
+            testWindow = await SpecRunnerUtils.createTestWindowAndRun({forceReload: true});
             $ = testWindow.$;
 
             // Load module instances from brackets.test
@@ -64,7 +64,7 @@ define(function (require, exports, module) {
             MainViewManager = null;
             await SpecRunnerUtils.closeTestWindow();
             testWindow = null;
-        });
+        }, 30000);
 
         afterEach(function () {
             testWindow.closeAllFiles();

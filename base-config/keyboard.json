@@ -1,15 +1,12 @@
 {
-    "file.newFile":  [
-        "Alt-N"
+    "file.newFile": [
+        "Ctrl-1"
     ],
-    "file.open":  [
-        "Ctrl-O"
+    "file.newFolder":  [
+        "Ctrl-3"
     ],
     "file.close":  [
-        "Alt-W"
-    ],
-    "file.openFolder": [
-        "Ctrl-Alt-O"
+        "Ctrl-`"
     ],
     "file.close_all":  [
         "Alt-Shift-W"
@@ -24,7 +21,7 @@
         "Ctrl-Shift-S"
     ],
     "file.liveFilePreview":  [
-        "Ctrl-Alt-P"
+        "Ctrl-Alt-L"
     ],
     "file.reloadLivePreview": [
         {
@@ -36,6 +33,9 @@
     ],
     "file.quit":  [
         "Ctrl-Q"
+    ],
+    "file.duplicateFile": [
+        "Ctrl-2"
     ],
     "edit.undo": [
         "Ctrl-Z"
@@ -277,6 +277,9 @@
     "navigate.quickOpen":  [
         "Ctrl-Shift-O"
     ],
+    "navigate.showInFileTree":  [
+        "Ctrl-Shift-0"
+    ],
     "navigate.gotoLine":  [
         {
             "key": "Ctrl-G"
@@ -331,9 +334,6 @@
             "key": "Alt-Down",
             "displayKey": "Alt-↓"
         }
-    ],
-    "navigate.newRule":  [
-        "Ctrl-Alt-N"
     ],
     "file.rename":  [
         "Shift-F2"

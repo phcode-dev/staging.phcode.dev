@@ -40,22 +40,17 @@ define(function (require, exports, module) {
             expect(FeatureGate.getAllRegisteredFeatures().includes(FEATURE2)).toEqual(true);
             await awaitsFor(function () {
                 return notified === FEATURE2 && featureDefaultValue === true;
-            }, 100, "Feature gate registration notification");
+            }, "Feature gate registration notification");
         });
 
-        it("user should be able to override feature in localstorage", function () {
-            const FEATURENAME = "feature3",
-                STORAGE_KEY = `${FEATURENAME}`;
-            localStorage.removeItem(STORAGE_KEY);
-            FeatureGate.registerFeatureGate(FEATURENAME, true);
+        it("user should be able to override feature enable/disable in FeatureGate", function () {
+            const FEATURE_NAME = "feature3";
+            FeatureGate.registerFeatureGate(FEATURE_NAME, true);
 
-            localStorage.setItem(STORAGE_KEY, "enabled");
-            expect(FeatureGate.isFeatureEnabled(FEATURENAME)).toEqual(true);
-            localStorage.setItem(STORAGE_KEY, "disabled");
-            expect(FeatureGate.isFeatureEnabled(FEATURENAME)).toEqual(false);
-            localStorage.setItem(STORAGE_KEY, "invalidValueWillHonorDefaultValue");
-            expect(FeatureGate.isFeatureEnabled(FEATURENAME)).toEqual(true);
-            localStorage.removeItem(STORAGE_KEY);
+            FeatureGate.setFeatureEnabled(FEATURE_NAME, true);
+            expect(FeatureGate.isFeatureEnabled(FEATURE_NAME)).toEqual(true);
+            FeatureGate.setFeatureEnabled(FEATURE_NAME, false);
+            expect(FeatureGate.isFeatureEnabled(FEATURE_NAME)).toEqual(false);
         });
     });
 });

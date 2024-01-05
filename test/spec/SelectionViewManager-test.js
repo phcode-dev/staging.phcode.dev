@@ -27,7 +27,7 @@ define(function (require, exports, module) {
     var SpecRunnerUtils    = require("spec/SpecRunnerUtils"),
         KeyEvent           = require("utils/KeyEvent");
 
-    describe("integration:Selection View", function () {
+    describe("LegacyInteg:Selection View", function () {
         let testFolder = SpecRunnerUtils.getTestPath("/spec/quickview-extn-test-files");
 
         // load from testWindow
@@ -41,6 +41,10 @@ define(function (require, exports, module) {
             testFile = "test.css",
             testFileJS = "test.js",
             oldFile;
+
+        beforeAll(async function () {
+            await SpecRunnerUtils.createTestWindowAndRun({forceReload: true});
+        }, 30000);
 
         beforeEach(async function () {
             // Create a new window that will be shared by ALL tests in this spec.
@@ -73,7 +77,7 @@ define(function (require, exports, module) {
             EditorManager    = null;
             SelectionViewManager = null;
             await SpecRunnerUtils.closeTestWindow();
-        });
+        }, 30000);
 
         async function getPopoverAtPos(lineNum, columnNum) {
             editor  = EditorManager.getCurrentFullEditor();

@@ -31,7 +31,7 @@ define(function (require, exports, module) {
 
     require("editor/EditorCommandHandlers");
 
-    describe("integration:EditorCommandHandlers Integration", function () {
+    describe("LegacyInteg:EditorCommandHandlers Integration", function () {
         let myDocument, myEditor;
 
         afterEach(function () {
@@ -61,17 +61,6 @@ define(function (require, exports, module) {
         let testPath = SpecRunnerUtils.getTestPath("/spec/EditorCommandHandlers-test-files"),
             testWindow;
 
-        // Helper function for creating a test window
-        async function createTestWindow(spec) {
-            testWindow = await SpecRunnerUtils.createTestWindowAndRun();
-            // Load module instances from brackets.test
-            CommandManager      = testWindow.brackets.test.CommandManager;
-            Commands            = testWindow.brackets.test.Commands;
-            EditorManager       = testWindow.brackets.test.EditorManager;
-
-            await SpecRunnerUtils.loadProjectInTestWindow(testPath);
-        }
-
         // Helper function to open a new inline editor
         async function openInlineEditor(spec) {
             var promise;
@@ -95,8 +84,7 @@ define(function (require, exports, module) {
                         let $dlg = testWindow.$(".modal.instance");
                         return !!$dlg.length;
                     },
-                    "brackets.test.closing",
-                    1000
+                    "brackets.test.closing"
                 );
             } catch (e) {
                 // do nothing.
@@ -120,12 +108,18 @@ define(function (require, exports, module) {
             await SpecRunnerUtils.closeTestWindow();
         }
         beforeAll(async function () {
-            await createTestWindow(this);
+            testWindow = await SpecRunnerUtils.createTestWindowAndRun({forceReload: true});
+            // Load module instances from brackets.test
+            CommandManager      = testWindow.brackets.test.CommandManager;
+            Commands            = testWindow.brackets.test.Commands;
+            EditorManager       = testWindow.brackets.test.EditorManager;
+
+            await SpecRunnerUtils.loadProjectInTestWindow(testPath);
         }, 30000);
 
         afterAll(async function () {
             await closeTestWindow();
-        });
+        }, 30000);
 
 
         describe("Move Lines Up/Down - inline editor", function () {
@@ -204,7 +198,7 @@ define(function (require, exports, module) {
 
                 myEditor = EditorManager.getCurrentFullEditor();
                 myEditor.setCursorPos({line: 5, ch: 8});
-                await awaits(200); // for the code intelligence framework to prime up
+                await awaits(1500); // for the code intelligence framework to prime up
                 promise = CommandManager.execute(Commands.NAVIGATE_JUMPTO_DEFINITION);
                 await awaitsForDone(promise, "Jump To Definition");
 
@@ -216,6 +210,53 @@ define(function (require, exports, module) {
             });
         });
 
+        if(window.Phoenix.browser.isTauri) {
+            // unfortunately, browsers don't allow unattended clip board access as its a secure context. Clipboard API
+            // will usually popup a clipboard access popup which the user have to click agree manually. So
+            // we do this test only in tauri.
+            describe("Editor copy paste Commands Test", function () {
+                let savedClipboardText = '';
+                beforeAll(async function () {
+                    try{
+                        // we don't want to nuke the users clipboard text just for running the test runner.
+                        // So save and restore clipboard.
+                        savedClipboardText = await testWindow.Phoenix.app.clipboardReadText();
+                    } catch (e) {
+                        //ignore this error.
+                        console.error("Could not read clipboard text", e);
+                    }
+                });
+
+                afterAll(async function () {
+                    try{
+                        // we don't want to nuke the users clipboard text just for running the test runner.
+                        // So save and restore clipboard.
+                        await testWindow.Phoenix.app.copyToClipboard(savedClipboardText || '');
+                    } catch (e) {
+                        //ignore this error.
+                        console.error("Could not read clipboard text", e);
+                    }
+                });
+
+                it("should copy and paste without selection", async function () {
+                    let promise;
+                    promise = CommandManager.execute(Commands.CMD_ADD_TO_WORKINGSET_AND_OPEN, {fullPath: testPath + "/test.js"});
+                    await awaitsForDone(promise, "Open into working set");
+
+                    myEditor = EditorManager.getCurrentFullEditor();
+                    myEditor.setSelection({line: 5, ch: 8}, {line: 5, ch: 10});
+
+                    const textToCopy = "#Phcode_Copy_test";
+                    await testWindow.Phoenix.app.copyToClipboard(textToCopy);
+
+                    promise = CommandManager.execute(Commands.EDIT_PASTE);
+                    await awaitsForDone(promise, "pasted");
+
+                    myEditor.setSelection({line: 5, ch: 8}, {line: 5, ch: 8 + textToCopy.length});
+                    expect(myEditor.getSelectedText()).toEql(textToCopy);
+                });
+            });
+        }
 
         describe("Open Line Above and Below - inline editor", function () {
 
