@@ -804,6 +804,20 @@ a:focus {
 
 }
 
+#titlebar li {
+    .dropdown-toggle:hover, a:hover{
+        background-color: transparent;
+        border-color: transparent;
+    }
+}
+
+#titlebar li .selected, #titlebar li .selected:hover{
+    background-color: @bc-bg-highlight;
+    .dark & {
+        background-color: @dark-bc-bg-highlight;
+    }
+}
+
 /* Status bar language picker's DropdownButton */
 .dropdownbutton-popup.dropdown-status-bar {
     -webkit-transform-origin: 0 100%;
@@ -956,6 +970,7 @@ a:focus {
 
 .modal-footer .btn {
     float: none;
+    margin-bottom: 0;
 }
 .modal-footer .left {
     float: left;

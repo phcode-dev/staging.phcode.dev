@@ -38,6 +38,9 @@
  * right place
  */
 @import "brackets_shared.less";
+// Integrated extensions import
+@import "Extn-NavigationAndHistory.less";
+@import "Extn-RecentProjects.less";
 
 /* Overall layout */
 
@@ -202,10 +205,6 @@ a, img {
         border-bottom: 1px solid @dark-bc-shadow;
         box-shadow: 0 1px 3px @dark-bc-shadow-small;
     }
-}
-
-.forced-hidden {
-    display: none !important;
 }
 
 .forced-inVisible {
@@ -391,6 +390,28 @@ a, img {
     background-color: rgb(120, 178, 242);
 }
 
+
+#sync-button {
+    width: 24px;
+    height: 24px;
+}
+
+#help-button {
+    width: 24px;
+    height: 24px;
+}
+
+.syncing {
+    background-image: url("images/Ajax-Loading.svg");
+}
+
+.preview {
+    background-image: url("images/share-fill.svg");
+}
+
+.help {
+    background-image: url("images/discuss-icon.svg");
+}
 
 #editor-holder {
     position: relative;
@@ -1266,6 +1287,23 @@ a, img {
     }
 }
 
+//jstree icons
+
+.bd-icon {
+    display: inline-block;
+    font-size: 14px;
+    vertical-align: middle;
+    color: white;
+    padding-right: 3px;
+    opacity: .8;
+    width: 17px;
+}
+
+.jstree-clicked .bd-icon, .selected .bd-icon {
+    color: #8fddff;
+    opacity: 1;
+}
+
 /** Unicode Icon container
 */
 .unicode-icon-container {
@@ -1791,6 +1829,12 @@ a, img {
 
 #selection-view-container.preview-bubble-below:after {
     display: none;
+}
+
+.sticky-li-top {
+    position: sticky;
+    top: 0;
+    background: @bc-text-searching-match;
 }
 
 /* Modal bar for Find/Quick Open */

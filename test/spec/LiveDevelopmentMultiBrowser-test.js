@@ -28,6 +28,14 @@ define(function (require, exports, module) {
 
     describe("livepreview:MultiBrowser Live Preview", function () {
 
+        async function _waitForIframeSrc(name) {
+            await awaitsFor(()=>{
+                let outerIFrame = testWindow.document.getElementById("panel-live-preview-frame");
+                let srcURL = new URL(outerIFrame.src);
+                return srcURL.pathname.endsWith(name) === true;
+            }, "waiting for name- " + name);
+        }
+
         if(Phoenix.isTestWindowPlaywright && !Phoenix.browser.desktop.isChromeBased) {
             it("All tests requiring virtual server is disabled in playwright/firefox/safari", async function () {
                 // we dont spawn virtual server in iframe playwright linux/safari as playwright linux/safari fails badly
@@ -46,10 +54,16 @@ define(function (require, exports, module) {
             CommandManager,
             BeautificationManager,
             Commands,
-            WorkspaceManager;
+            WorkspaceManager,
+            PreferencesManager,
+            Dialogs,
+            NativeApp;
 
-        var testFolder = SpecRunnerUtils.getTestPath("/spec/LiveDevelopment-MultiBrowser-test-files"),
+        let testFolder = SpecRunnerUtils.getTestPath("/spec/LiveDevelopment-MultiBrowser-test-files"),
+            prettierTestFolder = SpecRunnerUtils.getTestPath("/spec/prettier-test-files"),
             allSpacesRE = /\s+/gi;
+
+        const SVG_IMAGE_PATH = "sub/phoenix-logo.svg";
 
         function fixSpaces(str) {
             return str.replace(allSpacesRE, " ");
@@ -66,6 +80,7 @@ define(function (require, exports, module) {
             return browserText;
         }
 
+        let savedNativeAppOpener;
         beforeAll(async function () {
             // Create a new window that will be shared by ALL tests in this spec.
             if (!testWindow) {
@@ -84,6 +99,10 @@ define(function (require, exports, module) {
                 EditorManager       = brackets.test.EditorManager;
                 WorkspaceManager    = brackets.test.WorkspaceManager;
                 BeautificationManager       = brackets.test.BeautificationManager;
+                PreferencesManager       = brackets.test.PreferencesManager;
+                NativeApp       = brackets.test.NativeApp;
+                Dialogs       = brackets.test.Dialogs;
+                savedNativeAppOpener = NativeApp.openURLInDefaultBrowser;
 
                 await SpecRunnerUtils.loadProjectInTestWindow(testFolder);
                 if(!WorkspaceManager.isPanelVisible('live-preview-panel')){
@@ -94,6 +113,7 @@ define(function (require, exports, module) {
 
         afterAll(async function () {
             LiveDevMultiBrowser.close();
+            NativeApp.openURLInDefaultBrowser = savedNativeAppOpener;
             await SpecRunnerUtils.closeTestWindow(true);
             testWindow = null;
             brackets = null;
@@ -103,7 +123,11 @@ define(function (require, exports, module) {
             EditorManager       = null;
         }, 30000);
 
+        async function _enableLiveHighlights(enable) {
+            PreferencesManager.setViewState("livedevHighlight", enable);
+        }
         async function endPreviewSession() {
+            await _enableLiveHighlights(true);
             LiveDevMultiBrowser.close();
             await awaitsForDone(CommandManager.execute(Commands.FILE_CLOSE_ALL, { _forceClose: true }),
                 "closing all file");
@@ -460,7 +484,7 @@ define(function (require, exports, module) {
             await endPreviewSession();
         }, 30000);
 
-        it("should Markdown/image files be previewed and switched between live previews", async function () {
+        it("should Markdown/svg image files be previewed and switched between live previews", async function () {
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
                 "SpecRunnerUtils.openProjectFiles simple1.html");
 
@@ -474,16 +498,139 @@ define(function (require, exports, module) {
             let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
             expect(iFrame.src.endsWith("readme.md")).toBeTrue();
 
-            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["sub/icon_chevron.png"]),
-                "icon_chevron.png");
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles([SVG_IMAGE_PATH]),
+                SVG_IMAGE_PATH);
             await awaits(500);
             iFrame = testWindow.document.getElementById("panel-live-preview-frame");
             let srcURL = new URL(iFrame.src);
-            expect(srcURL.pathname.endsWith("sub/icon_chevron.png")).toBeTrue();
+            expect(srcURL.pathname.endsWith(SVG_IMAGE_PATH)).toBeTrue();
 
             // now switch back to old file
             await _editFileAndVerifyLivePreview("simple1.html", {line: 11, ch: 45}, 'hello world ',
                 "testId", "Brackets is hello world hello world awesome!");
+            await endPreviewSession();
+        }, 30000);
+
+        it("should not live preview binary image files", async function () {
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+
+            await waitsForLiveDevelopmentToOpen();
+            await _editFileAndVerifyLivePreview("simple1.html", {line: 11, ch: 45}, 'hello world ',
+                "testId", "Brackets is hello world awesome!");
+
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["sub/icon_chevron.png"]),
+                "sub/icon_chevron.png");
+            await awaits(500);
+            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            expect(iFrame.src.endsWith("simple1.html")).toBeTrue();
+            await endPreviewSession();
+        }, 30000);
+
+        it("focus test: should html live previews never take focus from editor", async function () {
+            // this test may fail if the test window doesn't have focus
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+
+            await waitsForLiveDevelopmentToOpen();
+            await _editFileAndVerifyLivePreview("simple1.html", {line: 11, ch: 45}, 'hello world ',
+                "testId", "Brackets is hello world awesome!");
+
+            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            expect(iFrame.src.endsWith("simple1.html")).toBeTrue();
+            iFrame.focus(); // live preview has focus but it can take html focus, the live preview has to
+            // delegate focus to editor explicitly in case of html files.
+            expect(testWindow.document.activeElement).toEqual(iFrame);
+            // for html, it can take focus, but clicking on any non- text elemnt will make it loose focus to editor
+            await forRemoteExec(`document.getElementById("testId2").click()`);
+            await awaits(500);
+            const activeElement = testWindow.document.activeElement;
+            const editorHolder = testWindow.document.getElementById("editor-holder");
+            expect(editorHolder.contains(activeElement)).toBeTrue();
+
+            await endPreviewSession();
+        }, 30000);
+
+        async function openPreviewAndClickTextInputsInPreview() {
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["hyperlink.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+
+            await waitsForLiveDevelopmentToOpen();
+
+            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            expect(iFrame.src.endsWith("hyperlink.html")).toBeTrue();
+            iFrame.focus(); // live preview has focus but it can take html focus, the live preview has to
+            // delegate focus to editor explicitly in case of html files.
+            expect(testWindow.document.activeElement).toEqual(iFrame);
+            // for html, it can take focus, but clicking on any text elemnt will focus file preview
+            await forRemoteExec(`document.getElementById("textArea").click()`);
+            await awaits(300);
+            expect(testWindow.document.activeElement).toEqual(iFrame);
+            await forRemoteExec(`document.getElementById("inputText").click()`);
+            await awaits(300);
+            expect(testWindow.document.activeElement).toEqual(iFrame);
+        }
+
+        it("focus test: should html live previews take focus from editor on text filed click in live preview", async function () {
+            // this test may fail if the test window doesn't have focus
+            await openPreviewAndClickTextInputsInPreview();
+            await endPreviewSession();
+        }, 30000);
+
+        async function triggerEscapeKeyEvent() {
+            // Create a new KeyboardEvent
+            const jsExec= `document.getElementById("inputText").dispatchEvent(new KeyboardEvent("keydown", {
+                key: "Escape",
+                keyCode: 27, // keyCode for Escape key
+                code: "Escape",
+                which: 27,
+                bubbles: true, // Event bubbles up through the DOM
+                cancelable: true // Event can be canceled
+            }))`;
+            await forRemoteExec(jsExec);
+        }
+
+        it("focus test: should pressing escape key on live preview focued input focus editor", async function () {
+            // this test may fail if the test window doesn't have focus
+            await openPreviewAndClickTextInputsInPreview();
+            await triggerEscapeKeyEvent();
+
+            // Editor will gain focus on escape key press
+            await awaits(500);
+            const activeElement = testWindow.document.activeElement;
+            const editorHolder = testWindow.document.getElementById("editor-holder");
+            expect(editorHolder.contains(activeElement)).toBeTrue();
+
+            await endPreviewSession();
+        }, 30000);
+
+        it("focus test: should markdown previews never take focus from editor", async function () {
+            // this test may fail if the test window doesn't have focus
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+
+            await waitsForLiveDevelopmentToOpen();
+            await _editFileAndVerifyLivePreview("simple1.html", {line: 11, ch: 45}, 'hello world ',
+                "testId", "Brackets is hello world awesome!");
+
+            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            expect(iFrame.src.endsWith("simple1.html")).toBeTrue();
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["readme.md"]),
+                "readme.md");
+
+            await awaits(300);
+            let outerIFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            expect(outerIFrame.src.endsWith("readme.md")).toBeTrue();
+            outerIFrame.focus();
+            expect(testWindow.document.activeElement).toEqual(outerIFrame);
+
+            // Editor lost focus, it will gain back as the editor detects it lost focus to live preview pane in 100 ms
+            await awaits(500);
+
+            const activeElement = testWindow.document.activeElement;
+            const editorHolder = testWindow.document.getElementById("editor-holder");
+            expect(editorHolder.contains(activeElement)).toBeTrue();
+
             await endPreviewSession();
         }, 30000);
 
@@ -498,7 +645,7 @@ define(function (require, exports, module) {
 
             await awaits(300);
             let outerIFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            expect(outerIFrame.src.endsWith("LiveDevelopment-MultiBrowser-test-files/readme.md")).toBeTrue();
+            expect(outerIFrame.src.endsWith("readme.md")).toBeTrue();
 
             // todo check hrefs in markdown. currently we do not have mechanism to exec code image and markdown previews
             // in future we should do this check too.
@@ -510,31 +657,134 @@ define(function (require, exports, module) {
             await endPreviewSession();
         }, 30000);
 
-        it("should pin live previews pin html file", async function () {
+        it("should embedded html live previews be able to open urls in external browser for a target=_blank", async function () {
+            // test is only for tauri. In browser, browser handles the anchor tags
+            if(!Phoenix.browser.isTauri) {
+                return;
+            }
+            let openURLRequested;
+            NativeApp.openURLInDefaultBrowser = function (_url) {
+                openURLRequested = _url;
+            };
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["hyperlink.html"]),
+                "SpecRunnerUtils.openProjectFiles hyperlink.html");
+
+            await waitsForLiveDevelopmentToOpen();
+
+            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            expect(iFrame.src.endsWith("hyperlink.html")).toBeTrue();
+
+            await forRemoteExec(`document.getElementById("externalLink").click()`);
+            await awaitsFor(function () { return openURLRequested; }, "https://google.com/ open", 2000);
+            expect(openURLRequested).toEqual("https://google.com");
+
+            openURLRequested = null;
+            await forRemoteExec(`document.getElementById("relativeLink").click()`);
+            await awaitsFor(function () { return openURLRequested; }, "simple1.html relative url to open", 2000);
+            expect(openURLRequested.startsWith("http://localhost:")).toBeTrue();
+            expect(openURLRequested.endsWith("/simple1.html")).toBeTrue();
+
+            await endPreviewSession();
+        }, 30000);
+
+        it("should opening 4 target=_blank urls consecutively engage confirm dialog", async function () {
+            async function waitForDialog() {
+                var $dlg;
+                await awaitsFor(function () {
+                    $dlg = testWindow.$(".modal.instance");
+                    return $dlg.length > 0;
+                },  "dialog to appear");
+            }
+            // test is only for tauri. In browser, browser handles the anchor tags
+            if(!Phoenix.browser.isTauri) {
+                return;
+            }
+            let openURLRequested;
+            NativeApp.openURLInDefaultBrowser = function (_url) {
+                openURLRequested = _url;
+            };
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["hyperlink.html"]),
+                "SpecRunnerUtils.openProjectFiles hyperlink.html");
+
+            await waitsForLiveDevelopmentToOpen();
+
+            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            expect(iFrame.src.endsWith("hyperlink.html")).toBeTrue();
+
+            for(let i=0;i<4;i++){
+                await forRemoteExec(`document.getElementById("externalLink").click()`);
+            }
+            await awaitsFor(function () { return openURLRequested; }, "https://google.com/ open", 2000);
+            expect(openURLRequested).toEqual("https://google.com");
+            await waitForDialog();
+
+            // now click on the links a lotta time, no url should be opened
+            openURLRequested = null;
+            for(let i=0;i<40;i++){
+                await forRemoteExec(`document.getElementById("externalLink").click()`);
+            }
+            await awaits(300);
+            expect(openURLRequested).toEqual(null);
+
+            openURLRequested = null;
+            await SpecRunnerUtils.clickDialogButton(Dialogs.DIALOG_BTN_OK);
+            expect(openURLRequested).toEqual("https://google.com");
+
+            // after accepting the dialog, new urls should open.
+            openURLRequested = null;
+            await forRemoteExec(`document.getElementById("externalLink").click()`);
+            await awaitsFor(function () { return openURLRequested; }, "https://google.com/ open", 2000);
+
+            await endPreviewSession();
+        }, 30000);
+
+        it("should be able to preview Markdown file not in project", async function () {
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
                 "SpecRunnerUtils.openProjectFiles simple1.html");
 
             await waitsForLiveDevelopmentToOpen();
-            await _editFileAndVerifyLivePreview("simple1.html", {line: 11, ch: 45}, 'hello world ',
-                "testId", "Brackets is hello world awesome!");
 
-            let pinURLBtn = testWindow.$(testWindow.document.getElementById("pinURLButton"));
-            pinURLBtn.click();
+            await awaitsForDone(SpecRunnerUtils.openFiles([`${prettierTestFolder}/test.md`]),
+                "external proj/test.md");
 
-            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["sub/icon_chevron.png"]),
-                "icon_chevron.png");
-            await awaits(500);
-            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            expect(iFrame.src.endsWith(`simple1.html`))
-                .toBeTrue();
-
-            pinURLBtn.click();
-
-            await awaits(1000);
+            await awaits(300);
             let outerIFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            let srcURL = new URL(outerIFrame.src);
-            expect(srcURL.pathname.endsWith("sub/icon_chevron.png")).toBeTrue();
+            expect(outerIFrame.src.endsWith("test.md")).toBeTrue();
+            await endPreviewSession();
+        }, 30000);
 
+        it("should title of live preview panel be as expected", async function () {
+            const titleEl = testWindow.document.getElementById('panel-live-preview-title');
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+            await waitsForLiveDevelopmentToOpen();
+
+            expect(titleEl.textContent.startsWith("simple1.html")).toBeTrue();
+
+            const fullExternalFilePath = `${prettierTestFolder}/test.md`;
+            await awaitsForDone(SpecRunnerUtils.openFiles([fullExternalFilePath]),
+                "external proj/test.md");
+
+            await awaits(300);
+            expect(titleEl.textContent.startsWith(Phoenix.app.getDisplayPath(fullExternalFilePath))).toBeTrue();
+            await endPreviewSession();
+        }, 30000);
+
+        it("should not be able to preview html file not in project - tauri only", async function () {
+            if(!Phoenix.browser.isTauri) {
+                return;
+            }
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+
+            await waitsForLiveDevelopmentToOpen();
+
+            await awaitsForDone(SpecRunnerUtils.openFiles([`${prettierTestFolder}/html/test.html`]),
+                "external project html/test.html");
+
+            await awaits(300);
+            let outerIFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            expect(outerIFrame.src.includes("phoenix-splash/no-preview.html")).toBeTrue();
             await endPreviewSession();
         }, 30000);
 
@@ -725,6 +975,28 @@ define(function (require, exports, module) {
             await endPreviewSession();
         }, 30000);
 
+        it("should reverse highlight be disabled if live highlight is disabled", async function () {
+            await _enableLiveHighlights(false);
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+
+            await waitsForLiveDevelopmentToOpen();
+            let editor = EditorManager.getActiveEditor();
+            editor && editor.setCursorPos({ line: 0, ch: 0 });
+
+            await awaits(500);
+            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result)=>{
+                return result === 0;
+            });
+            await forRemoteExec(`document.getElementById("testId2").click()`);
+
+            await awaits(500);
+            expect(editor.getCursorPos()).toEql({ line: 0, ch: 0, sticky: null });
+
+            await _enableLiveHighlights(true);
+            await endPreviewSession();
+        }, 30000);
+
         it("should ctrl-s to save page be disabled inside live preview iframes", async function () {
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
                 "SpecRunnerUtils.openProjectFiles simple1.html");
@@ -782,8 +1054,8 @@ define(function (require, exports, module) {
                 "SpecRunnerUtils.openProjectFiles exploit1.html");
 
             await waitsForLiveDevelopmentToOpen();
-            await forRemoteExec(`document.fetchedText`, (result)=>{
-                return result && result.startsWith("Security Warning from phcode.dev<br><br>");
+            await forRemoteExec(`document.responseStatus`, (result)=>{
+                return result === 404;
             });
 
             await endPreviewSession();
@@ -825,5 +1097,151 @@ define(function (require, exports, module) {
 
             await endPreviewSession();
         }, 30000);
+
+        it("should pin live previews pin html file - 1", async function () {
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+
+            await waitsForLiveDevelopmentToOpen();
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+
+            await _waitForIframeSrc(`simple1.html`);
+
+            let pinURLBtn = testWindow.$(testWindow.document.getElementById("pinURLButton"));
+            pinURLBtn.click();
+
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles([SVG_IMAGE_PATH]),
+                SVG_IMAGE_PATH);
+            await awaits(500);
+            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            expect(iFrame.src.endsWith(`simple1.html`))
+                .toBeTrue();
+
+            pinURLBtn.click();
+
+            await awaits(1000);
+            iFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            let srcURL = new URL(iFrame.src);
+            expect(srcURL.pathname.endsWith(SVG_IMAGE_PATH)).toBeTrue();
+
+            await endPreviewSession();
+        }, 30000);
+
+        it("should pin live previews pin markdown file", async function () {
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+
+            await waitsForLiveDevelopmentToOpen();
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles([`readme.md`]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+
+            await _waitForIframeSrc(`readme.md`);
+            let pinURLBtn = testWindow.$(testWindow.document.getElementById("pinURLButton"));
+            pinURLBtn.click();
+
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles([SVG_IMAGE_PATH]),
+                SVG_IMAGE_PATH);
+            await awaits(500);
+            await _waitForIframeSrc(`readme.md`);
+
+            pinURLBtn.click();
+
+            await _waitForIframeSrc(SVG_IMAGE_PATH);
+
+            await endPreviewSession();
+        }, 30000);
+
+        it("should pin live previews pin svg image file", async function () {
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+
+            await waitsForLiveDevelopmentToOpen();
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles([SVG_IMAGE_PATH]),
+                "SpecRunnerUtils.openProjectFiles "+ SVG_IMAGE_PATH);
+
+            await _waitForIframeSrc(SVG_IMAGE_PATH);
+            let pinURLBtn = testWindow.$(testWindow.document.getElementById("pinURLButton"));
+            pinURLBtn.click();
+
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "simple1.html");
+            await awaits(500);
+            await _waitForIframeSrc(SVG_IMAGE_PATH);
+
+            pinURLBtn.click();
+
+            await _waitForIframeSrc("simple1.html");
+
+            await endPreviewSession();
+        }, 30000);
+
+        it("should pin live previews pin html file even on live preview panel open/hide", async function () {
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+
+            await waitsForLiveDevelopmentToOpen();
+            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            expect(iFrame.src.endsWith(`simple1.html`))
+                .toBeTrue();
+
+            let pinURLBtn = testWindow.$(testWindow.document.getElementById("pinURLButton"));
+            pinURLBtn.click();
+
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple2.html"]),
+                "simple2.html");
+            await awaits(500);
+            expect(iFrame.src.endsWith(`simple1.html`))
+                .toBeTrue();
+
+            // now close the live preview panel by clicking on live preview extension icon
+            let livePreviewBtn = testWindow.$(testWindow.document.getElementById("toolbar-go-live"));
+            livePreviewBtn.click();
+            await awaits(500);
+            livePreviewBtn.click();
+            await awaits(500);
+            expect(iFrame.src.endsWith(`simple1.html`))
+                .toBeTrue();
+
+            pinURLBtn.click();
+
+            await awaits(1000);
+            let outerIFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            let srcURL = new URL(outerIFrame.src);
+            expect(srcURL.pathname.endsWith("simple2.html")).toBeTrue();
+
+            await endPreviewSession();
+        }, 30000);
+
+        it("should unpin live previews on project switch", async function () {
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+
+            await waitsForLiveDevelopmentToOpen();
+            await window.Phoenix.VFS.ensureExistsDirAsync("/test/parked");
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles([SVG_IMAGE_PATH]),
+                "SpecRunnerUtils.openProjectFiles"+SVG_IMAGE_PATH);
+
+            await _waitForIframeSrc(SVG_IMAGE_PATH);
+            let pinURLBtn = testWindow.$(testWindow.document.getElementById("pinURLButton"));
+            pinURLBtn.click();
+
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "simple1.html");
+            await awaits(500);
+            await _waitForIframeSrc(SVG_IMAGE_PATH);
+
+            await SpecRunnerUtils.loadProjectInTestWindow("/test/parked");
+            await awaits(500);
+            await SpecRunnerUtils.loadProjectInTestWindow(testFolder);
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "simple1.html");
+            await waitsForLiveDevelopmentToOpen();
+
+            await _waitForIframeSrc("simple1.html");
+
+            await endPreviewSession();
+        }, 30000);
+
     });
 });

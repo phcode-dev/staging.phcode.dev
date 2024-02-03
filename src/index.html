@@ -40,7 +40,12 @@
     <link rel="mask-icon" href="styles/images/favicons/safari-pinned-tab.svg" color="#da532c">
     <meta name="msapplication-TileColor" content="#47484B">
     <title>Phoenix Code</title>
-
+    <!--    boot-time styles only here-->
+    <style>
+        .forced-hidden {
+            display: none !important;
+        }
+    </style>
     <!-- start inline javascript and non module bootstrap scripts. you must add module scripts to the
      javascript module section only!!-->
     <script>
@@ -55,9 +60,20 @@
             const isSpecRunnerWindow = window.location.pathname.endsWith("/SpecRunner.html");
             return isTestPhoenixWindow || isSpecRunnerWindow;
         }
+        let canAccessTauri = false;
+        try {
+            // This is to allow phoenix live previews in phoenix desktop editor so that we can
+            // develop phoenix inside phoenix.
+            // This will throw an error if the live preview iframe and parent are cross-origin which is case in phcode
+            canAccessTauri = window.top.window.__TAURI__;
+            canAccessTauri = true;
+        } catch (e) {
+            // Cross-origin, exception caught, isSameOrigin remains false
+        }
+
         // In Mac !! the window.__TAURI__ object is present in iframes, even if it doesnt works. so we are forced
         // to use if(window.parent.window !== window) instead of if(!window.__TAURI__) here.
-        if(window.parent.window !== window && window.top.window.__TAURI__) {
+        if(canAccessTauri && window.parent.window !== window && window.top.window.__TAURI__) {
             // This is only intended to be used for in tests where phoenix is loaded inside iframes.
             // this means that we are loaded in an iframe in the specrunner. Tauri doesnt expose tauri APIs
             // in its iframes, so we directly use the top most windows tauri api object for tests to run properly.
@@ -467,7 +483,22 @@
             function _requireDone() {
                 loadJS('verify-dependencies-loaded.js', null, document.body);
             }
-            loadJS('thirdparty/requirejs/require.js', _requireDone, document.body, "main");
+            if(window.PhStore){
+                window.PhStore.storageReadyPromise
+                    .finally(()=>{
+                        loadJS('thirdparty/requirejs/require.js', _requireDone, document.body, "main");
+                    });
+            } else {
+                const interval = setInterval(()=>{
+                    if(PhStore){
+                        clearInterval(interval);
+                        PhStore.storageReadyPromise
+                            .finally(()=>{
+                                loadJS('thirdparty/requirejs/require.js', _requireDone, document.body, "main");
+                            });
+                    }
+                }, 50);
+            }
         }
     </script>
 
@@ -487,13 +518,14 @@
     <script src="phoenix/virtual-server-loader.js" type="module" defer></script>
 <!--    node loader should come only after fs libs are loaded as we init fs libs with node fs urls-->
     <script src="node-loader.js" defer></script>
-    <script src="storage.js" defer></script>
+    <script src="storage.js" type="module"></script>
     <!-- end javascript module scripts-->
 
     <!-- CSS/LESS -->
 
     <link rel="stylesheet" type="text/css" href="thirdparty/fontawesome/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="thirdparty/devicon/devicon.min.css">
+    <link rel="stylesheet" type="text/css" href="thirdparty/file-icons/ffont.css">
     <link rel="stylesheet" type="text/css" href="styles/brackets-all.css"> <!--will be replaced in prod/staging with brackets-all.css by release:staging and prod command-->
 
     <!-- Pre-load third party scripts that cannot be async loaded. Defer loading of all below scripts

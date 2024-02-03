@@ -94,6 +94,21 @@
         "lineComment": ["//"]
     },
 
+    "tsx": {
+        "name": "Typescript JSX",
+        "mode": ["jsx", "text/typescript-jsx"],
+        "fileExtensions": ["tsx"],
+        "blockComment": ["/*", "*/"],
+        "lineComment": ["//"]
+    },
+
+    "tex": {
+        "name": "LaTeX",
+        "mode": ["stex", "text/x-stex"],
+        "fileExtensions": ["tex", "ltx", "sty", "cls", "bib", "bst"],
+        "lineComment": ["%"]
+    },
+
     "dart": {
         "name": "Dart",
         "mode": ["dart", "application/dart"],
@@ -157,6 +172,14 @@
         "name": "C++",
         "mode": ["clike", "text/x-c++src"],
         "fileExtensions": ["cc", "cp", "cpp", "c++", "cxx", "hh", "hpp", "hxx", "h++", "ii", "ino"],
+        "blockComment": ["/*", "*/"],
+        "lineComment": ["//"]
+    },
+
+    "rust": {
+        "name": "Rust",
+        "mode": ["rust", "text/x-rustsrc"],
+        "fileExtensions": ["rs"],
         "blockComment": ["/*", "*/"],
         "lineComment": ["//"]
     },
@@ -287,6 +310,13 @@
         "lineComment": ["#"]
     },
 
+    "toml": {
+        "name": "TOML",
+        "mode": ["toml", "text/x-toml"],
+        "fileExtensions": ["toml"],
+        "lineComment": ["#"]
+    },
+
     "hx": {
         "name": "Haxe",
         "mode": "haxe",
@@ -305,7 +335,7 @@
 
     "image": {
         "name": "Image",
-        "fileExtensions": ["gif", "png", "jpe", "jpeg", "jpg", "ico", "bmp", "webp"],
+        "fileExtensions": ["gif", "png", "jpe", "jpeg", "jpg", "ico", "bmp", "webp", "avif"],
         "isBinary": true
     },
 

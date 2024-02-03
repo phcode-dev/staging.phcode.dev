@@ -98,6 +98,7 @@
             'https://staging.phcode.dev': true,
             'https://create.phcode.dev': true
         };
+        let okMessageTemplate;
 
         function isTrustedURL(url) {
             if(!url){
@@ -116,6 +117,23 @@
         let previewURL;
         let trustedProjects = [];
         let currentProjectRoot;
+
+        function getTrustOkButton() {
+            if(! okMessageTemplate){
+                return "Trust Project?";
+            }
+            if(!currentProjectRoot){
+                return okMessageTemplate.replace("{0}", "");
+            }
+            let projectName = currentProjectRoot;
+            if(projectName.endsWith("/")){
+                projectName = projectName.slice(0, -1);
+            }
+            projectName = projectName.split("/");
+            projectName = projectName[projectName.length-1];
+            return okMessageTemplate.replace("{0}", projectName);
+        }
+
         function setupNavigationWatcher(controllingPhoenixInstanceID) {
             let livepreviewServerIframe = document.getElementById("live-preview-server-iframe");
             const LOG_LIVE_PREVIEW_KEY= "logLivePreview";
@@ -136,7 +154,7 @@
                 const dialog = document.getElementById('outer-container');
                 switch (type) {
                     case "REDIRECT_PAGE":
-                        previewURL = event.data.url;
+                        previewURL = event.data.URL;
                         if(!securityAlertAcknowledged){
                             return;
                         }
@@ -164,6 +182,7 @@
                         return;
                     case "PROJECT_SWITCH":
                         currentProjectRoot = event.data.projectRoot;
+                        document.getElementById('okButton').textContent = getTrustOkButton();
                         if(trustedProjects[currentProjectRoot] && dialog){
                             dialog.style.display = 'none';
                             if(isTrustedURL(previewURL)){
@@ -233,11 +252,12 @@
             const phoenixInstanceID = queryParams.get('phoenixInstanceID');
             const virtualServerURL = queryParams.get('virtualServerURL');
             const localiseMessage = queryParams.get('localMessage');
-            const okMessage = queryParams.get('okMessage');
+            const appName = queryParams.get('appName');
+            okMessageTemplate = decodeURIComponent(queryParams.get('okMessage'));
             currentProjectRoot = queryParams.get('initialProjectRoot');
 
-            if(!phoenixInstanceID || !initialURL || !virtualServerURL){
-                console.error("Expected required query strings: phoenixInstanceID, initialURL, virtualServerURL");
+            if(!phoenixInstanceID || !initialURL || !virtualServerURL || !appName){
+                console.error("Expected required query strings: phoenixInstanceID, initialURL, virtualServerURL, appName");
                 return;
             }
             setupNavigationWatcher(phoenixInstanceID);
@@ -247,8 +267,9 @@
                 livepreviewServerIframe.setAttribute("src", serverURL);
             }
 
-            okMessage && (document.getElementById('okButton').textContent = decodeURIComponent(okMessage));
+            document.getElementById('okButton').textContent = getTrustOkButton();
             localiseMessage && (document.getElementById('dialog-message').textContent = decodeURIComponent(localiseMessage));
+            appName && (document.getElementById('appName').textContent = decodeURIComponent(appName));
             previewURL = decodeURIComponent(initialURL);
         }
 
@@ -257,7 +278,7 @@
 <body onload="navigateToInitialURL()">
     <div id="outer-container" class="outer-container">
         <div id='dialog-container' class="dialog-container">
-            <div class="dialog-title">Phoenix Code Live Preview</div>
+            <div id="appName" class="dialog-title">Phoenix Code Live Preview</div>
             <div id="dialog-message" class="dialog-message">
                 You are about to open an HTML file for live preview. Please proceed only if you trust the source of this project. Click 'OK' to continue, or close this window if you do not trust the source.
             </div>
@@ -277,7 +298,7 @@
     <iframe id="previewFrame"
             title="live preview"
             src="about:blank"
-            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-pointer-lock">
+            sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals allow-pointer-lock">
     </iframe>
 </body>
 </html>

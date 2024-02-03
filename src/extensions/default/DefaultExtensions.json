@@ -18,22 +18,13 @@
     "JavaScriptRefactoring",
     "JSHint",
     "MDNDocs",
-    "NavigationAndHistory",
-    "Phoenix",
     "Phoenix-prettier",
     "PrefsCodeHints",
-    "QuickOpenCSS",
-    "QuickOpenHTML",
-    "QuickOpenJavaScript",
     "QuickView",
-    "RecentProjects",
-    "RemoteFileAdapter",
     "SVGCodeHints",
     "UrlCodeHints",
     "HealthData",
-    "Phoenix-extension-store",
-    "Phoenix-live-preview",
-    "icons"
+    "Phoenix-extension-store"
   ],
  "warnExtensionStoreExtensions": {
    "description": "list extension ids here that you want to show this warning in extension store: 'You may not need this extension. Phoenix comes built in with this feature.'",

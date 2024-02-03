@@ -10,7 +10,7 @@ window.AppConfig = {
         "get_involved_url": "https://github.com/phcode-dev/phoenix/discussions/77",
         "glob_help_url": "https://github.com/adobe/brackets/wiki/Using-File-Filters",
         "release_notes_url": "https://github.com/adobe/brackets/wiki/Release-Notes",
-        "homepage_url": "https://core.ai",
+        "homepage_url": "https://phcode.io",
         "twitter_url": "https://twitter.com/phcodedev",
         "troubleshoot_url": "https://github.com/adobe/brackets/wiki/Troubleshooting#wiki-livedev",
         "twitter_name": "@phcodedev",
@@ -23,7 +23,7 @@ window.AppConfig = {
         "extension_store_url": "https://store.core.ai/src/",
         "app_notification_url": "https://updates.phcode.io/appNotifications/staging/",
         "linting.enabled_by_default": true,
-        "build_timestamp": "2024-01-05T13:14:45.810Z",
+        "build_timestamp": "2024-02-03T08:35:18.338Z",
         "googleAnalyticsID": "G-FP5S9BKDSJ",
         "googleAnalyticsIDDesktop": "G-D5R1Y6PTS8",
         "mixPanelID": "a7e08ffd43c37767c29b13df1d2e6c62",
@@ -34,8 +34,8 @@ window.AppConfig = {
         "bugsnagEnv": "staging"
     },
     "name": "Phoenix",
-    "version": "3.2.16-19639",
-    "apiVersion": "3.2.16",
+    "version": "3.2.25-19810",
+    "apiVersion": "3.2.25",
     "homepage": "https://core.ai",
     "issues": {
         "url": "https://github.com/phcode-dev/phoenix/issues"
