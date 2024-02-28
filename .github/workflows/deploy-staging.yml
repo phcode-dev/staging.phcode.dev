@@ -25,6 +25,7 @@ jobs:
         run: |
           npm ci
           npm run release:staging
+          npm run _releaseWebCache
           npm run zipTestFiles
           cp -r dist distToDeploy/
           cp -r dist distToDeploy/src/
