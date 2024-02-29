@@ -57,6 +57,7 @@ define(function (require, exports, module) {
     require("spec/JSUtils-test");
     require("spec/JSUtils-integ-test");
     require("spec/KeyBindingManager-test");
+    require("spec/KeybindingManager-integ-test");
     require("spec/LanguageManager-test");
     require("spec/LanguageManager-integ-test");
     require("spec/LowLevelFileIO-test");
@@ -90,6 +91,7 @@ define(function (require, exports, module) {
     require("spec/PreferencesManager-integ-test");
     require("spec/MainViewFactory-integ-test");
     require("spec/MainViewManager-integ-test");
+    require("spec/Keyboard-nav-integ-test");
     require("spec/Menu-integ-test");
     require("spec/ProjectManager-integ-test");
     require("spec/QuickOpen-integ-test");
@@ -110,6 +112,7 @@ define(function (require, exports, module) {
     require("spec/Storage-integ-test");
     require("spec/file-encoding-integ-test");
     require("spec/StateManager-test");
+    require("spec/TaskManager-integ-test");
     // Integrated extension tests
     require("spec/Extn-InAppNotifications-integ-test");
     require("spec/Extn-RemoteFileAdapter-integ-test");

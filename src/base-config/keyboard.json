@@ -9,7 +9,7 @@
         "Ctrl-`"
     ],
     "file.close_all":  [
-        "Alt-Shift-W"
+        "Ctrl-Alt-Shift-W"
     ],
     "file.save":  [
         "Ctrl-S"
@@ -184,7 +184,7 @@
     ],
     "cmd.findAllAndSelect": [
         {
-            "key": "Alt-F3"
+            "key": "Alt-Shift-F3"
         },
         {
             "key": "Cmd-Ctrl-G",
@@ -193,12 +193,7 @@
     ],
     "cmd.addNextMatch": [
         {
-            "key": "Alt-B"
-        }
-    ],
-    "cmd.skipCurrentMatch": [
-        {
-            "key": "Alt-Shift-B"
+            "key": "Alt-F3"
         }
     ],
     "cmd.replace":  [

@@ -65,6 +65,7 @@
 @accent-string-2: brown;
 @accent-meta: #9C8819;
 @accent-error: #dc322f;
+@accent-success: #62c462;;
 @accent-qualifier: #446fbd;
 @accent-builtin: #446fbd;
 @accent-bracket: #222;
@@ -117,6 +118,9 @@
 @live-preview-sync-error-background: #ff5d99;
 @live-preview-sync-error-color: #fff;
 
+@overlay-text: #444444;
+@dark-overlay-text: #FFF;
+
 /* Code font formatting
  *
  * NOTE (JRB): In order to get the web font to load early enough, we have a div called "dummy-text" that
@@ -159,7 +163,7 @@
  */
 
 .dark {
-    .editor-holder {
+    #editor-holder, .editor-holder {
         @background: #1d1f21;
         @foreground: #ddd;
         .CodeMirror .CodeMirror-selected {

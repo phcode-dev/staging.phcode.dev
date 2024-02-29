@@ -239,6 +239,22 @@ define(function (require, exports, module) {
     }
 
     /**
+     * creates an editable temp dir with copied contents from the test folder specified
+     * @param pathInTestDir
+     * @return {*}
+     */
+    async function getTempTestDirectory(pathInTestDir) {
+        if(!pathInTestDir){
+            throw new Error("getTempTestDirectory should be called with a test folder in test dir");
+        }
+        const testDir = getTestPath(pathInTestDir);
+        const testTempDir = getTestPath("/tempTest"+pathInTestDir);
+        await awaitsForDone(deletePath(testTempDir, true));
+        await awaitsForDone(copyPath(testDir, testTempDir));
+        return testTempDir;
+    }
+
+    /**
      * Create the temporary unit test project directory.
      */
     async function createTempDirectory() {
@@ -1388,6 +1404,7 @@ define(function (require, exports, module) {
     exports.getTestRoot                     = getTestRoot;
     exports.getTestPath                     = getTestPath;
     exports.getTempDirectory                = getTempDirectory;
+    exports.getTempTestDirectory            = getTempTestDirectory;
     exports.createTempDirectory             = createTempDirectory;
     exports.getBracketsSourceRoot           = getBracketsSourceRoot;
     exports.makeAbsolute                    = makeAbsolute;
