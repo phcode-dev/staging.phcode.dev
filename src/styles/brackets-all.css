@@ -11726,28 +11726,27 @@ body:not(.has-appshell-menus) .modal-bar {
   visibility: hidden;
 }
 .filter-trash-icon:hover {
-  color: #000000;
+  color: #74B120;
+  cursor: pointer;
 }
 .filter-edit-icon {
   float: right;
   width: 13px;
   height: 13px;
-  background-image: url("images/edit-icon.svg");
-  background-repeat: no-repeat;
-  opacity: 0.5;
+  color: rgba(0, 0, 0, 0.5);
   visibility: hidden;
   position: relative;
-  top: 2px;
   right: -4px;
 }
 .filter-edit-icon:hover {
-  opacity: 1;
+  color: #74B120;
+  cursor: pointer;
 }
 li:hover .filter-trash-icon,
 li:hover .filter-edit-icon {
   visibility: visible;
 }
-.recent-filter-name {
+.recent-filter-type {
   margin-left: 12px;
 }
 .recent-filter-patterns {
@@ -12525,5 +12524,89 @@ label input {
   font-size: 0;
   line-height: 0;
   white-space: nowrap;
+}
+.toggle-switch {
+  --width: 90px;
+  --height: 28px;
+  /* Adding text in the toggle button */
+}
+.toggle-switch .toggle {
+  position: relative;
+  display: inline-block;
+  width: var(--width);
+  height: var(--height);
+  box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.toggle-switch .toggle input {
+  display: none;
+}
+.toggle-switch .toggle .slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 3px;
+  transition: all 0.4s ease-in-out;
+}
+.dark .toggle-switch .toggle .slider {
+  background-color: #555;
+}
+.toggle-switch .toggle .slider::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(var(--height));
+  height: calc(var(--height));
+  border-radius: 3px;
+  background-color: #fff;
+  box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.3);
+  transition: all 0.4s ease-in-out;
+}
+.toggle-switch .toggle input:checked + .slider {
+  background-color: #016dc4;
+}
+.toggle-switch .toggle input:checked + .slider::before {
+  transform: translateX(calc(var(--width) - var(--height)));
+}
+.toggle-switch label {
+  margin-bottom: 0;
+}
+.toggle-switch .toggle .labels {
+  position: absolute;
+  top: 5px;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  font-size: 0.9em;
+  transition: all 0.4s ease-in-out;
+}
+.toggle-switch .toggle .labels::before {
+  content: attr(data-on);
+  position: absolute;
+  left: 5px;
+  color: #fff;
+  opacity: 0;
+  transition: all 0.4s ease-in-out;
+}
+.toggle-switch .toggle .labels::after {
+  content: attr(data-off);
+  position: absolute;
+  right: 5px;
+  color: #111;
+  opacity: 1;
+  transition: all 0.4s ease-in-out;
+}
+.dark .toggle-switch .toggle .labels::after {
+  color: #fff;
+}
+.toggle-switch .toggle input:checked ~ .labels::after {
+  opacity: 0;
+}
+.toggle-switch .toggle input:checked ~ .labels::before {
+  opacity: 1;
 }
 /*# sourceMappingURL=brackets-all.css.map */
