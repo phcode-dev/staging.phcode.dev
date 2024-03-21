@@ -9721,6 +9721,9 @@ html.dark,
 body.dark {
   color: #ccc;
 }
+#phcode-io-main-nav {
+  color: #6bbeff;
+}
 #ctrl-nav-overlay {
   position: absolute;
   display: flex;
@@ -11548,11 +11551,15 @@ body:not(.has-appshell-menus) .modal-bar {
 .modal-bar #replace-with {
   width: 295px;
 }
-.modal-bar .search-input-container {
+.modal-bar .search-input-container,
+.modal-bar .filter-container {
   position: relative;
   display: inline;
 }
-.modal-bar .search-input-container .error {
+.modal-bar .search-input-container .error,
+.modal-bar .filter-container .error,
+.modal-bar .search-input-container .error-filter,
+.modal-bar .filter-container .error-filter {
   position: absolute;
   left: 5px;
   top: 24px;
@@ -11565,23 +11572,36 @@ body:not(.has-appshell-menus) .modal-bar {
   border-radius: 0 0 3px 3px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
-.dark .modal-bar .search-input-container .error {
+.dark .modal-bar .search-input-container .error,
+.dark .modal-bar .filter-container .error,
+.dark .modal-bar .search-input-container .error-filter,
+.dark .modal-bar .filter-container .error-filter {
   background-color: #f74687;
   color: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
-.modal-bar .search-input-container #find-what {
+.modal-bar .search-input-container #find-what,
+.modal-bar .filter-container #find-what {
   padding-right: 78px;
   width: 239px;
 }
-.modal-bar .search-input-container .dropdown-icon {
+.modal-bar .search-input-container .dropdown-icon,
+.modal-bar .filter-container .dropdown-icon,
+.modal-bar .search-input-container .filter-dropdown-icon,
+.modal-bar .filter-container .filter-dropdown-icon {
   background: url(images/dropdown-icon.svg) no-repeat scroll 15px 15px;
   background-position: center right;
   width: 20px;
   height: 20px;
 }
 .modal-bar .search-input-container #find-counter,
-.modal-bar .search-input-container .dropdown-icon {
+.modal-bar .filter-container #find-counter,
+.modal-bar .search-input-container #filter-counter,
+.modal-bar .filter-container #filter-counter,
+.modal-bar .search-input-container .dropdown-icon,
+.modal-bar .filter-container .dropdown-icon,
+.modal-bar .search-input-container .filter-dropdown-icon,
+.modal-bar .filter-container .filter-dropdown-icon {
   position: absolute;
   color: #777;
   top: 1px;
@@ -11589,8 +11609,24 @@ body:not(.has-appshell-menus) .modal-bar {
   font-size: 12px;
 }
 .dark .modal-bar .search-input-container #find-counter,
-.dark .modal-bar .search-input-container .dropdown-icon {
+.dark .modal-bar .filter-container #find-counter,
+.dark .modal-bar .search-input-container #filter-counter,
+.dark .modal-bar .filter-container #filter-counter,
+.dark .modal-bar .search-input-container .dropdown-icon,
+.dark .modal-bar .filter-container .dropdown-icon,
+.dark .modal-bar .search-input-container .filter-dropdown-icon,
+.dark .modal-bar .filter-container .filter-dropdown-icon {
   color: #bbb;
+}
+.modal-bar .filter-container {
+  margin-left: -11px;
+}
+.modal-bar .filter-container #fif-filter-input {
+  border-top-left-radius: unset;
+  border-bottom-left-radius: unset;
+}
+.modal-bar .filter-container .filter-dropdown-icon {
+  right: 10px;
 }
 .modal-bar .find-input-group {
   display: inline-block;
@@ -11606,6 +11642,9 @@ body:not(.has-appshell-menus) .modal-bar {
 .modal-bar .scope-group {
   display: inline-block;
   margin-left: 10px;
+}
+.modal-bar .scope-group .file-filter-picker {
+  min-width: 150px;
 }
 .modal-bar .indexing-group {
   display: inline-block;
@@ -12327,17 +12366,37 @@ label input {
 .notification-popup-container.style-danger {
   background: var(--bc-toast-danger-bg-color);
 }
+.notification-popup-container.style-danger a {
+  color: white;
+  cursor: pointer;
+}
 .notification-popup-container.style-error {
   background: var(--bc-toast-error-bg-color);
+}
+.notification-popup-container.style-error a {
+  color: white;
+  cursor: pointer;
 }
 .notification-popup-container.style-info {
   background: var(--bc-toast-info-bg-color);
 }
+.notification-popup-container.style-info a {
+  color: blue;
+  cursor: pointer;
+}
 .notification-popup-container.style-success {
   background: var(--bc-toast-success-bg-color);
 }
+.notification-popup-container.style-success a {
+  color: darkblue;
+  cursor: pointer;
+}
 .notification-popup-container.style-warning {
   background: var(--bc-toast-warning-bg-color);
+}
+.notification-popup-container.style-warning a {
+  color: white;
+  cursor: pointer;
 }
 .notification-popup-container.animateOpen {
   opacity: 1;

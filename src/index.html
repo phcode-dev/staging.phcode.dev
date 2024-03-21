@@ -34,9 +34,8 @@
            connect-src * localhost:* asset: https://asset.localhost ;">
     <meta name= "viewport" content="width=device-width, user-scalable=no" />
     <meta name="theme-color" content="#47484B">
+    <link rel="icon" type="image/x-icon" href="styles/images/favicons/fav.png">
     <link rel="apple-touch-icon" sizes="180x180" href="styles/images/favicons/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="styles/images/favicons/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="styles/images/favicons/favicon-16x16.png">
     <link rel="mask-icon" href="styles/images/favicons/safari-pinned-tab.svg" color="#da532c">
     <meta name="msapplication-TileColor" content="#47484B">
     <link rel="manifest" href="manifest.json">
@@ -50,7 +49,7 @@
     <!-- start inline javascript and non module bootstrap scripts. you must add module scripts to the
      javascript module section only!!-->
 <!--    The app cache version is set by the pipeline version update script. Do not update manually.-->
-    <script>window.PHOENIX_APP_CACHE_VERSION="3.4.7";</script>
+    <script>window.PHOENIX_APP_CACHE_VERSION="3.4.9";</script>
 <!--    The app cache version is set by the pipeline version update script. Do not update manually.-->
     <script>
         if(["dev.phcode.dev", "staging.phcode.dev"].includes(location.hostname)
@@ -622,7 +621,7 @@
                 document.body.classList.add('dark'); // This will later be overridden by the theme manager as required.
             }
             _addOrRemoveSplashScreenIfNeeded();
-            if(!Phoenix.browser.isTauri) {
+            if(!Phoenix.browser.isTauri && !Phoenix.isTestWindow) {
                 const currentCacheVersion = localStorage.getItem(window._CURRENT_CACHE_VERSION_KEY);
                 if(currentCacheVersion !== PHOENIX_APP_CACHE_VERSION){
                     // dont load phoenix as the cache is inconsistent, the updater will reload after fixing cache
@@ -758,6 +757,9 @@
         <div id="mainNavBar">
             <div id="mainNavBarLeft">
                 <div id="newProject" class="new-project-btn btn-alt-quiet"></div>
+            </div>
+            <div>
+                <a id="phcode-io-main-nav" href="https://phcode.io" target="_blank" rel="noopener">phcode.io</a>
             </div>
             <div id="mainNavBarRight">
                 <div id="navBackButton" class="nav-back-btn btn-alt-quiet"></div>
