@@ -125,6 +125,10 @@ html, body {
     }
 }
 
+.code-inspection-item {
+    text-align: left;
+}
+
 .editor-text-fragment-hover{
     text-decoration-style: solid;
     text-decoration-line: underline;
@@ -151,36 +155,72 @@ html, body {
     border-right: 2px @bc-primary-btn-border solid;
 }
 
-.editor-text-fragment-error{
-    text-decoration-style: wavy;
-    text-decoration-line: underline;
-    text-decoration-color: @error-underline-text;
-    text-decoration-thickness: 1px;
-    text-decoration-skip-ink: none;
+// error class has highest visual precedence, followed by warning, spell error and info.
+// .error.error: This selector has 4x the class name, which increases its specificity compared to single class
+// selectors like .warning or .info. Even if error, warning, and info are used on the same div in any order,
+// the style for .error.error will take precedence due to its higher specificity.
+.editor-text-fragment-error.editor-text-fragment-error.editor-text-fragment-error.editor-text-fragment-error{
+    border-bottom:2px dotted @error-underline-text;
+    display: inline-block;
+    position: relative;
 }
 
-.editor-text-fragment-warn{
-    text-decoration-style: wavy;
-    text-decoration-line: underline;
-    text-decoration-color: @warn-underline-text;
-    text-decoration-thickness: 1px;
-    text-decoration-skip-ink: none;
+.editor-text-fragment-error.editor-text-fragment-error.editor-text-fragment-error.editor-text-fragment-error:after{
+    content: '';
+    width: 100%;
+    border-bottom:2px dotted @error-underline-text;
+    position: absolute;
+    display:block;
+    bottom: -3px;
+    left: 2px;
+}
+
+.editor-text-fragment-warn.editor-text-fragment-warn.editor-text-fragment-warn{
+    border-bottom:2px dotted @warn-underline-text;
+    display: inline-block;
+    position: relative;
+}
+
+.editor-text-fragment-warn.editor-text-fragment-warn.editor-text-fragment-warn:after{
+    content: '';
+    width: 100%;
+    border-bottom:2px dotted @warn-underline-text;
+    position: absolute;
+    display:block;
+    bottom: -3px;
+    left: 2px;
 }
 
 .editor-text-fragment-info{
-    text-decoration-style: dashed;
-    text-decoration-line: underline;
-    text-decoration-color: @info-underline-text;
-    text-decoration-thickness: 1px;
-    text-decoration-skip-ink: none;
+    border-bottom:2px dotted @info-underline-text;
+    display: inline-block;
+    position: relative;
 }
 
-.editor-text-fragment-spell-error{
-    text-decoration-style: wavy;
-    text-decoration-line: underline;
-    text-decoration-color: @spell-underline-text;
-    text-decoration-thickness: 1px;
-    text-decoration-skip-ink: none;
+.editor-text-fragment-info:after{
+    content: '';
+    width: 100%;
+    border-bottom:2px dotted @info-underline-text;
+    position: absolute;
+    display:block;
+    bottom: -3px;
+    left: 2px;
+}
+
+.editor-text-fragment-spell-error.editor-text-fragment-spell-error{
+    border-bottom:2px dotted @spell-underline-text;
+    display: inline-block;
+    position: relative;
+}
+
+.editor-text-fragment-spell-error.editor-text-fragment-spell-error:after{
+    content: '';
+    width: 100%;
+    border-bottom:2px dotted @spell-underline-text;
+    position: absolute;
+    display:block;
+    bottom: -3px;
+    left: 2px;
 }
 
 .hidden-element{
@@ -859,6 +899,10 @@ a, img {
                 display: inline;
             }
         }
+    }
+
+    .CodeMirror-ruler{
+        z-index: 1;
     }
 
     .active-pane {
@@ -1936,6 +1980,15 @@ a, img {
     }
 }
 
+.quick-view-partition {
+    border-bottom: 2px solid @bc-quick-view-separator;
+    .dark & {
+        border-bottom: 2px solid @dark-bc-quick-view-separator;
+    }
+    padding-bottom: 5px;
+    margin-bottom: 5px;
+}
+
 #quick-view-container.active {
     transform: scale(1);
     opacity: 1;
@@ -2078,13 +2131,13 @@ a, img {
         transition: transform 266ms cubic-bezier(0, 0.56, 0, 1);
     }
 
-    input {
+    input, textarea {
         font-family: @sansFontFamily;
         outline: none;
         width: 20em;
         margin: 5px 5px 0;
         position: relative;
-        top: -3px;
+        top: -4px;
         &.no-results {
             border: 1px solid  @bc-btn-border-error;
             box-shadow: inset 0 1px 0 @bc-shadow-small, 0 0 0 1px @bc-btn-border-error-glow;
@@ -2103,6 +2156,53 @@ a, img {
     .search-input-container, .filter-container {
         position: relative;
         display: inline;
+        resize: none;
+
+        .find-what-wrapper {
+            display: inline-flex;
+            align-items: center;
+            margin-top: 1px;
+            margin-left: 5px;
+        }
+
+        .find-what-wrapper-focused {
+            margin-top: 1px;
+            margin-left: 5px;
+            margin-right: 0;
+            outline: 0;
+            text-shadow: none;
+            border: 1px solid @bc-btn-border-focused;
+            border-radius: @bc-border-radius;
+            box-shadow: inset 0 1px 0 @bc-shadow-small, 0 0 0 1px @bc-btn-border-focused-glow;
+            .no-results & {
+                border: 1px solid  @bc-btn-border-error;
+                box-shadow: inset 0 1px 0 @bc-shadow-small, 0 0 0 1px @bc-btn-border-error-glow;
+
+                .dark & {
+                    border: 1px solid  @dark-bc-btn-border-error;
+                    box-shadow: inset 0 1px 0 @dark-bc-shadow-small, 0 0 0 1px @dark-bc-btn-border-error-glow;
+                }
+            }
+            .dark & {
+                margin-top: 0;
+                margin-right: -2px;
+                border: 1px solid @dark-bc-btn-border-focused;
+                box-shadow: inset 0 1px 0 @dark-bc-shadow-small, 0 0 0 1px @dark-bc-btn-border-focused-glow;
+            }
+            #find-what, #find-counter, .dropdown-icon {
+                border: none;
+            }
+        }
+
+        .no-results {
+            border: 1px solid  @bc-btn-border-error;
+            box-shadow: inset 0 1px 0 @bc-shadow-small, 0 0 0 1px @bc-btn-border-error-glow;
+
+            .dark & {
+                border: 1px solid  @dark-bc-btn-border-error;
+                box-shadow: inset 0 1px 0 @dark-bc-shadow-small, 0 0 0 1px @dark-bc-btn-border-error-glow;
+            }
+        }
 
         .error, .error-filter {  // "popup" that hangs below search field
             position: absolute;
@@ -2125,9 +2225,26 @@ a, img {
             }
         }
 
+        .error-filter{
+            min-width: 276px;
+            left: 9px;
+        }
+
         #find-what {
-            padding-right: 78px;  // room for #find-counter overlay
-            width: 295px - (62px - 6px);  // maintain width, accounting for differing padding
+            top: 0;
+            width: 215px;  // maintain width, accounting for differing padding
+            margin: 0;
+            height: 18px;
+            resize: none;
+            white-space: nowrap;
+            overflow-x: hidden;
+            border: 1px solid @bc-btn-border;
+            border-right: none;
+            .dark & {
+                border: 1px solid @dark-bc-btn-border;
+                border-right: none;
+            }
+            box-shadow: none;
         }
 
         .dropdown-icon, .filter-dropdown-icon {
@@ -2137,10 +2254,48 @@ a, img {
             height: 20px;
         }
 
-        #find-counter, #filter-counter, .dropdown-icon, .filter-dropdown-icon{
+        #find-counter, .dropdown-icon{
+            background-color: white;
+            color: @bc-text-thin-quiet;
+            font-size: 12px;
+
+            .dark & {
+                background-color: @dark-bc-input-bg;
+                color: @dark-bc-text-thin-quiet;
+            }
+        }
+        #find-counter {
+            font-weight: @font-weight-semibold;
+            padding: 0 5px;
+            width: 50px;
+            height: 26px;
+            margin: 0;
+            border: 1px solid @bc-btn-border;
+            border-left: none;
+            border-right: none;
+            display: flex;
+            align-items: center;
+            justify-content: end;
+            .dark & {
+                border: 1px solid @dark-bc-btn-border;
+                border-left: none;
+                border-right: none;
+            }
+        }
+        .dropdown-icon{
+            margin: 0;
+            border: 1px solid @bc-btn-border;
+            border-left: none;
+            height: 26px;
+            .dark & {
+                border: 1px solid @dark-bc-btn-border;
+                border-left: none;
+            }
+        }
+        #filter-counter, .filter-dropdown-icon{
+            top: 1px;
             position: absolute;
             color: @bc-text-thin-quiet;
-            top: 1px;
             right: 2px;
             font-size: 12px;
 
@@ -2148,6 +2303,10 @@ a, img {
                 color: @dark-bc-text-thin-quiet;
             }
         }
+    }
+
+    .search-input-container {
+        display: inline-flex;
     }
     .filter-container{
         margin-left: -11px;
@@ -2174,7 +2333,6 @@ a, img {
 
     .scope-group {
         display: inline-block;
-        margin-left: 10px;
         .file-filter-picker{
             min-width: 150px;
         }
@@ -2189,10 +2347,6 @@ a, img {
         display: inline-block;
         font-style: italic;
         margin-left: 5px;
-    }
-
-    .message, .no-results-message {
-        display: inline-block;
     }
 
     #find-case-sensitive, #find-regexp {
@@ -2236,6 +2390,10 @@ a, img {
         border-top-right-radius: 0;
         border-bottom-right-radius: 0;
         margin-left: 5px;
+        margin-top: 0;
+    }
+    #find-next {
+        margin-top: 0;
     }
 
     // Make button pairs snug
@@ -2251,6 +2409,7 @@ a, img {
     #replace-batch {
         border-radius: 0;
         margin-left: 0;
+        margin-top: -1px;
     }
     #replace-batch.solo {
         border-top-right-radius: 3px;
@@ -2270,10 +2429,24 @@ a, img {
         border-top-right-radius: 0;
         border-bottom-right-radius: 0;
     }
-    #find-case-sensitive, #replace-yes {
+    #find-case-sensitive {
+        border-left: none;
+        margin-left: -3px;
+        margin-top: 0;
+        border-radius: 0;
+    }
+    #find-regexp {
+        margin-left: -3px;
+        margin-top: 0;
+    }
+    #replace-yes {
         border-left: none;
         margin-left: 0;
         border-radius: 0;
+        margin-top: -1px;
+    }
+    #replace-all {
+        margin-top: -1px;
     }
 
     .close {
@@ -2336,7 +2509,8 @@ li:hover .filter-edit-icon {
 }
 
 button.file-filter-picker {
-    margin-left: 10px;
+    margin-left: 5px;
+    margin-top: 0;
 }
 
 // File exclusion filter editor dialog
@@ -2397,11 +2571,6 @@ textarea.exclusions-editor {
         border-top-right-radius: @bc-border-radius-small;
         border-bottom-right-radius: @bc-border-radius-small;
     }
-}
-#find-counter {
-    font-weight: @font-weight-semibold;
-    padding: 0 5px;
-    margin-right: 17px;
 }
 
 .tickmark-track {
@@ -2832,6 +3001,15 @@ label input {
 }
 
 /* Live Preview */
+
+.live-preview-custom-banner {
+    display: flex;
+    flex-direction: row;
+    background-color: #1E90FF;
+    color: white;
+    justify-content: flex-end;
+    align-items: center;
+}
 
 // CodeMirror uses inline styles for active line number, so must use !important here to override
 .live-preview-sync-error .CodeMirror-linenumber {

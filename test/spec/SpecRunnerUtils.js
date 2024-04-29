@@ -36,6 +36,7 @@ define(function (require, exports, module) {
         FileSystem          = require("filesystem/FileSystem"),
         WorkspaceManager    = require("view/WorkspaceManager"),
         UrlParams           = require("utils/UrlParams").UrlParams,
+        StringUtils         = require("utils/StringUtils"),
         LanguageManager     = require("language/LanguageManager");
 
     var TEST_PREFERENCES_KEY    = "com.adobe.brackets.test.preferences",
@@ -219,7 +220,7 @@ define(function (require, exports, module) {
     }
 
     function getTestRoot() {
-        if(Phoenix.browser.isTauri){
+        if(Phoenix.isNativeApp){
             return Phoenix.app.getApplicationSupportDirectory() + "test";
         }
         return '/test';
@@ -245,13 +246,16 @@ define(function (require, exports, module) {
      * @param pathInTestDir
      * @return {*}
      */
-    async function getTempTestDirectory(pathInTestDir) {
+    async function getTempTestDirectory(pathInTestDir, ranbomize) {
         if(!pathInTestDir){
             throw new Error("getTempTestDirectory should be called with a test folder in test dir");
         }
+        const tempPrefix = ranbomize ?
+            "/tempTest/"+ StringUtils.randomString(10): "/tempTest";
         const testDir = getTestPath(pathInTestDir);
-        const testTempDir = getTestPath("/tempTest"+pathInTestDir);
-        await awaitsForDone(deletePath(testTempDir, true));
+        const testTempDir = getTestPath(tempPrefix+pathInTestDir);
+        const testTempDirRoot = getTestPath("/tempTest");
+        await awaitsForDone(deletePath(testTempDirRoot, true));
         await awaitsForDone(copyPath(testDir, testTempDir));
         return testTempDir;
     }
@@ -553,6 +557,14 @@ define(function (require, exports, module) {
         await awaitsFor(()=>{
             let $dlg = _testWindow.$(".modal.instance");
             return $dlg.length >= 1;
+        }, timeout);
+    }
+
+    async function waitForNoModalDialog(timeout=2000) {
+        // Make sure there's one and only one dialog open
+        await awaitsFor(()=>{
+            let $dlg = _testWindow.$(".modal.instance");
+            return $dlg.length === 0;
         }, timeout);
     }
 
@@ -880,10 +892,11 @@ define(function (require, exports, module) {
     /**
      * Opens project relative file paths in the test window
      * @param {!(Array.<string>|string)} paths Project relative file path(s) to open
+     * @param {string} [paneId] - optional
      * @return {!$.Promise} A promise resolved with a mapping of project-relative path
      *  keys to a corresponding Document
      */
-    function openProjectFiles(paths) {
+    function openProjectFiles(paths, paneId) {
         var result = new $.Deferred(),
             fullpaths = makeArray(makeAbsolute(paths)),
             keys = makeArray(makeRelative(paths)),
@@ -894,7 +907,7 @@ define(function (require, exports, module) {
         Async.doSequentially(fullpaths, function (path, i) {
             var one = new $.Deferred();
 
-            FileViewController.openFileAndAddToWorkingSet(path).done(function (file) {
+            FileViewController.openFileAndAddToWorkingSet(path, paneId).done(function (file) {
                 docs[keys[i]] = DocumentManager.getOpenDocumentForPath(file.fullPath);
                 one.resolve();
             }).fail(function (err) {
@@ -977,6 +990,20 @@ define(function (require, exports, module) {
 
     function createTextFileAsync(path, text) {
         return jsPromise(createTextFile(path, text, _getFileSystem()));
+    }
+
+    function readTextFileAsync(path, fileSystem) {
+        fileSystem = fileSystem || _getFileSystem();
+        return new Promise((resolve, reject)=>{
+            const file = fileSystem.getFileForPath(path);
+            file.read({}, function (err, text) {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve(text);
+            });
+        });
     }
 
     /**
@@ -1358,7 +1385,7 @@ define(function (require, exports, module) {
         return entry.existsAsync(pathToCheck);
     }
 
-    async function waitTillPathExists(pathToCheck, isFolder = true, timeout = 2000, pollingInterval = 10) {
+    async function waitTillPathExists(pathToCheck, isFolder = true, timeout = 2000, pollingInterval = 50) {
         for(let i=0; i<timeout/pollingInterval; i++){
             let exists = await pathExists(pathToCheck, isFolder);
             if(exists){
@@ -1429,6 +1456,7 @@ define(function (require, exports, module) {
     exports.toggleQuickEditAtOffset         = toggleQuickEditAtOffset;
     exports.createTextFile                  = createTextFile;
     exports.createTextFileAsync             = createTextFileAsync;
+    exports.readTextFileAsync             = readTextFileAsync;
     exports.copyDirectoryEntry              = copyDirectoryEntry;
     exports.copyFileEntry                   = copyFileEntry;
     exports.copyPath                        = copyPath;
@@ -1439,6 +1467,7 @@ define(function (require, exports, module) {
     exports.waitTillPathExists              = waitTillPathExists;
     exports.waitTillPathNotExists           = waitTillPathNotExists;
     exports.waitForModalDialog              = waitForModalDialog;
+    exports.waitForNoModalDialog            = waitForNoModalDialog;
     exports.waitForBracketsDoneLoading      = waitForBracketsDoneLoading;
     exports.getTestWindow                   = getTestWindow;
     exports.simulateKeyEvent                = simulateKeyEvent;

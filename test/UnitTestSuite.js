@@ -21,6 +21,7 @@
 
 define(function (require, exports, module) {
 
+    require("spec/Phoenix-platform-test");
     require("spec/Tauri-platform-test");
     require("spec/utframework-suite-test");
     require("spec/Async-test");
@@ -105,6 +106,7 @@ define(function (require, exports, module) {
     require("spec/BeautificationManager-test");
     require("spec/Template-for-integ-test");
     require("spec/LiveDevelopmentMultiBrowser-test");
+    require("spec/LiveDevelopmentCustomServer-test");
     require("spec/NewFileContentManager-test");
     require("spec/InstallExtensionDialog-integ-test");
     require("spec/ExtensionInstallation-test");
@@ -118,6 +120,8 @@ define(function (require, exports, module) {
     require("spec/Extn-RemoteFileAdapter-integ-test");
     require("spec/Extn-NavigationAndHistory-integ-test");
     require("spec/Extn-RecentProjects-integ-test");
+    // extension integration tests
+    require("spec/Extn-CSSCodeHints-integ-test");
     // Node Tests
     require("spec/NodeConnection-test");
     // todo TEST_MODERN

@@ -1,15 +1,30 @@
+{{#multifile}}
+<div id="searchlabel" style="text-align: center; font-weight: bold; font-size: medium; padding-bottom: 5px;">
+    {{{scopeLabel}}}
+</div>
+{{/multifile}}
+
 <div class="find-input-group">
-    <div id="find-group"><!--
-        --><div class="search-input-container"><input autocomplete="off" spellcheck="false" type="text" id="find-what" placeholder="{{queryPlaceholder}}" value="{{initialQuery}}" /><div class="dropdown-icon" title="{{historyHelp}}"></div><div class="error"></div><span id="find-counter"></span></div><!--
-        --><button id="find-case-sensitive" class="btn no-focus" tabindex="-1" title="{{Strings.BUTTON_CASESENSITIVE_HINT}}"><div class="button-icon"></div></button><!--
-        --><button id="find-regexp" class="btn no-focus" tabindex="-1" title="{{Strings.BUTTON_REGEXP_HINT}}"><div class="button-icon"></div></button><!--
+    <div id="find-group">
+        <div class="search-input-container">
+                <div class="find-what-wrapper">
+                    <textarea id="find-what" spellcheck="false" autocomplete="off"
+                              placeholder="{{queryPlaceholder}}" rows="2" >{{initialQuery}}</textarea>
+                    <div id="find-counter"></div>
+                    <div class="dropdown-icon"></div>
+                </div>
+                <div class="error"></div>
+        </div>
+        <button id="find-case-sensitive" class="btn no-focus" tabindex="-1" title="{{Strings.BUTTON_CASESENSITIVE_HINT}}"><div class="button-icon"></div></button>
+        <button id="find-regexp" class="btn no-focus" tabindex="-1" title="{{Strings.BUTTON_REGEXP_HINT}}"><div class="button-icon"></div></button><!--
         {{^multifile}}
         --><div class="navigator"><!--
             --><button id="find-prev" class="btn no-focus" tabindex="-1" title="{{Strings.BUTTON_PREV_HINT}}">{{Strings.BUTTON_PREV}}</button><!--
             --><button id="find-next" class="btn no-focus" tabindex="-1" title="{{Strings.BUTTON_NEXT_HINT}}">{{Strings.BUTTON_NEXT}}</button><!--
         --></div><!--
         {{/multifile}}
-    --></div>
+    -->
+    </div>
 
     {{#replace}}
     <div id="replace-group" {{#scope}}class="has-scope"{{/scope}}><!--
@@ -27,10 +42,6 @@
 
 {{#multifile}}
 <div class="scope-group">
-    <div class="no-results-message">{{Strings.FIND_NO_RESULTS}}</div>
-    <div class="message">
-        <span id="searchlabel">{{{scopeLabel}}}</span>
-    </div>
     <!-- For Find in Files, the filter picker will be added here programmatically. -->
 </div>
 <div id="indexing-spinner" class="indexing-group forced-hidden">
