@@ -713,6 +713,23 @@ define(function (require, exports, module) {
                 return testWindow.$(".live-preview-custom-banner").is(":visible");
             }, "banner to show");
 
+            // now test if the banner comes up on disabling and then enabling custom server without changing any url
+            testWindow.$(".custom-server-banner-close-icon").click();
+            expect(testWindow.$(".live-preview-custom-banner").is(":visible")).toBe(false);
+
+            // now set the enabled preference once, this should show the banner
+            PreferencesManager.set(PREFERENCE_PROJECT_SERVER_ENABLED, false, PreferencesManager.PROJECT_SCOPE);
+            PreferencesManager.set(PREFERENCE_PROJECT_SERVER_ENABLED, true, PreferencesManager.PROJECT_SCOPE);
+            await awaitsFor(()=>{
+                return testWindow.$(".live-preview-custom-banner").is(":visible");
+            }, "banner to show");
+
+            // banner should now go away on custom server off
+            PreferencesManager.set(PREFERENCE_PROJECT_SERVER_ENABLED, false, PreferencesManager.PROJECT_SCOPE);
+            await awaitsFor(()=>{
+                return !testWindow.$(".live-preview-custom-banner").is(":visible");
+            }, "banner to show");
+
             await endPreviewSession();
         }, 30000);
 

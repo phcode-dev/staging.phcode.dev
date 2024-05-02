@@ -26,7 +26,7 @@
 <head id="main-scripts-head">
     <meta charset="utf-8">
     <meta http-equiv="Content-Security-Policy"
-          content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: asset: https://asset.localhost localhost:* ws://localhost:* https://storage.googleapis.com https://platform.twitter.com https://buttons.github.io https://unpkg.com/@aicore/ https://www.googletagmanager.com;
+          content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: asset: https://asset.localhost localhost:* ws://localhost:* ws://127.0.0.1:* https://storage.googleapis.com https://platform.twitter.com https://buttons.github.io https://unpkg.com/@aicore/ https://www.googletagmanager.com;
            img-src * data: localhost:* asset: https://asset.localhost ;
            media-src * data: localhost:* asset: https://asset.localhost ;
            font-src * data: localhost:* asset: https://asset.localhost ;
@@ -68,7 +68,7 @@
     <!-- start inline javascript and non module bootstrap scripts. you must add module scripts to the
      javascript module section only!!-->
 <!--    The app cache version is set by the pipeline version update script. Do not update manually.-->
-    <script>window.PHOENIX_APP_CACHE_VERSION="3.6.5";</script>
+    <script>window.PHOENIX_APP_CACHE_VERSION="3.7.0";</script>
 <!--    The app cache version is set by the pipeline version update script. Do not update manually.-->
     <script>
         if(["dev.phcode.dev", "staging.phcode.dev"].includes(location.hostname)
@@ -640,6 +640,7 @@
         // this function is called onload so it is safe to be deferred loaded inline script as it is guarented to only
         // get executed after all deferred scripts has been loaded
         function _loadPhoenixAfterSplashScreen() {
+            $("#Phoenix-Main .main-view").removeClass("forced-hidden");
             if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
                 // Dark mode is enabled
                 document.body.classList.add('dark'); // This will later be overridden by the theme manager as required.
@@ -774,7 +775,7 @@
             title="Phoenix Splash Screen" src="assets/phoenix-splash/index.html"></iframe>
 </div>
 
-<div class="main-view">
+<div class="main-view forced-hidden">
     <div id="notificationUIDefaultAnchor" href="#">
     </div>
     <div id="sidebar" class="sidebar panel quiet-scrollbars horz-resizable right-resizer collapsible" data-minsize="0" data-maxsize="80%" data-forceleft=".content">
