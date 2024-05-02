@@ -68,7 +68,7 @@
     <!-- start inline javascript and non module bootstrap scripts. you must add module scripts to the
      javascript module section only!!-->
 <!--    The app cache version is set by the pipeline version update script. Do not update manually.-->
-    <script>window.PHOENIX_APP_CACHE_VERSION="3.7.0";</script>
+    <script>window.PHOENIX_APP_CACHE_VERSION="3.7.1";</script>
 <!--    The app cache version is set by the pipeline version update script. Do not update manually.-->
     <script>
         if(["dev.phcode.dev", "staging.phcode.dev"].includes(location.hostname)
@@ -267,6 +267,7 @@
                     isTablet: _mobileAndTabletCheck(),
                     isMobile: _mobileCheck(),
                     isDeskTop: !_mobileAndTabletCheck() && !_mobileCheck(),
+                    isChromeOS: /CrOS/.test(navigator.userAgent),
                     isTauri: !!window.__TAURI__,
                     mobile: {
                         isAndroid: (navigator.userAgent.match(/Android/i) !== null),
