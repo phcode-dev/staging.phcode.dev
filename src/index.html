@@ -68,7 +68,7 @@
     <!-- start inline javascript and non module bootstrap scripts. you must add module scripts to the
      javascript module section only!!-->
 <!--    The app cache version is set by the pipeline version update script. Do not update manually.-->
-    <script>window.PHOENIX_APP_CACHE_VERSION="3.7.1";</script>
+    <script>window.PHOENIX_APP_CACHE_VERSION="3.7.3";</script>
 <!--    The app cache version is set by the pipeline version update script. Do not update manually.-->
     <script>
         if(["dev.phcode.dev", "staging.phcode.dev"].includes(location.hostname)
@@ -619,7 +619,8 @@
                         location.reload();
                         // force reload handlers should reload themselves.
                     }
-                } else if(location.href.endsWith("/src/") || location.href.endsWith("/dist/") || location.href.endsWith("index.html")){
+                } else if(location.pathname.endsWith("/src/") || location.pathname.endsWith("/dist/")
+                    || location.pathname.endsWith("index.html")){
                     // load phoenix if its any of the non-cached urls.
                     _loadPhoenixMain();
                 }

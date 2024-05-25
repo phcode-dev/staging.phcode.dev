@@ -946,5 +946,90 @@ define(function (require, exports, module) {
                 }, true);
             });
         });
+
+        describe("codeHintsSort", function () {
+            const query = "ab",
+                choices = ["f:ab", "zy", "abx"];
+            const testResult = JSON.parse(require("text!./StringMatch-test-data.json"));
+            it("should rank strings without options", function () {
+                const results = StringMatch.codeHintsSort(query, choices);
+                expect(results).toEql(testResult.query_ab);
+            });
+
+            function _runChoiceTest(upperCaseTest) {
+                it(`should empty query return all choices for upperCase: ${upperCaseTest}`, function () {
+                    const results = StringMatch.codeHintsSort("", choices);
+                    expect(results).toEql(testResult.query_empty);
+                });
+
+                it(`should valid query return matched choices for upperCase: ${upperCaseTest}`, function () {
+                    const results = StringMatch.codeHintsSort(upperCaseTest ? "Ab" : "ab", choices);
+                    expect(results).toEql(testResult.result_ab);
+                });
+
+                it(`should boosted prefixes come first with empty queries for upperCase: ${upperCaseTest}`, function () {
+                    const results = StringMatch.codeHintsSort("", choices, {
+                        boostPrefixList: ["zy"]
+                    });
+                    expect(results).toEql(testResult.result_boost_zy);
+                });
+
+                it(`should boost prefixes for upperCase: ${upperCaseTest}`, function () {
+                    const choice1 = ["aby", "abx"];
+                    let results = StringMatch.codeHintsSort(upperCaseTest ? "Ab" : "ab", choice1);
+                    // we now take the top result and make the non-top result top with boost prefix.
+                    const boostPrefixVal = results[1].label;
+                    results = StringMatch.codeHintsSort(upperCaseTest ? "Ab" : "ab", choice1, {
+                        boostPrefixList: [boostPrefixVal]
+                    });
+                    expect(results[0].label).toEql(boostPrefixVal);
+                });
+
+                it(`should boost multiple boost prefixes for upperCase: ${upperCaseTest}`, function () {
+                    const choices1 = ["aby", "abx", "zay", "zky"];
+                    let results = StringMatch.codeHintsSort(upperCaseTest ? "Ab" : "ab", choices1);
+                    // we now take the top result and make the non-top result top with boost prefix.
+                    const boostPrefixVal1 = results[1].label;
+                    results = StringMatch.codeHintsSort(upperCaseTest ? "Z" : "z", choices1);
+                    const boostPrefixVal2 = results[1].label;
+                    results = StringMatch.codeHintsSort(upperCaseTest ? "Ab" : "ab", choices1, {
+                        boostPrefixList: [boostPrefixVal1, boostPrefixVal2]
+                    });
+                    expect(results[0].label).toEql(boostPrefixVal1);
+                    results = StringMatch.codeHintsSort(upperCaseTest ? "Z" : "z", choices1, {
+                        boostPrefixList: [boostPrefixVal1, boostPrefixVal2]
+                    });
+                    expect(results[0].label).toEql(boostPrefixVal2);
+                });
+
+                it(`should limit work with empty queries for upperCase: ${upperCaseTest}`, function () {
+                    const results = StringMatch.codeHintsSort("", choices, {
+                        limit: 2
+                    });
+                    expect(results).toEql(testResult.query_empty.slice(0, 2));
+                });
+
+                it(`should limit work with queries for upperCase: ${upperCaseTest}`, function () {
+                    const choices1 = ["aby", "abx", "zay", "zky"];
+                    const results = StringMatch.codeHintsSort(upperCaseTest ? "A" : "a", choices1, {
+                        limit: 1
+                    });
+                    expect(results.length).toEql(1);
+                });
+
+                it(`should onlyContiguous work with queries for upperCase: ${upperCaseTest}`, function () {
+                    const choices1 = ["aby", "abx", "zayb", "zky"];
+                    let results = StringMatch.codeHintsSort(upperCaseTest ? "Ab" : "ab", choices1);
+                    expect(results.length).toBe(3);
+
+                    results = StringMatch.codeHintsSort(upperCaseTest ? "Ab" : "ab", choices1, {
+                        onlyContiguous: true
+                    });
+                    expect(results.length).toBe(2);
+                });
+            }
+            _runChoiceTest(false);
+            _runChoiceTest(true);
+        });
     });
 });

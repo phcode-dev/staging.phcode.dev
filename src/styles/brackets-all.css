@@ -9946,8 +9946,13 @@ img {
   border-bottom: 1px solid rgba(0, 0, 0, 0.09);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   font-size: 14px;
+  border-top: 1px solid #e7e7e7;
   position: relative;
   z-index: 17;
+}
+.dark #titlebar,
+.dark .modal-bar {
+  border-top: none;
 }
 .dark #titlebar,
 .dark .modal-bar {
