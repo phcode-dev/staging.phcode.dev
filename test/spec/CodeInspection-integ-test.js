@@ -89,13 +89,20 @@ define(function (require, exports, module) {
             return {errors: []};
         }
 
-        function failLintResult() {
+        function failLintResult(addFix) {
             return {
                 errors: [
                     {
                         pos: { line: 1, ch: 3 },
                         message: "Some errors here and there",
-                        type: CodeInspection.Type.WARNING
+                        type: CodeInspection.Type.WARNING,
+                        fix: addFix?{
+                            replaceText: "",
+                            rangeOffset: {
+                                start: 0,
+                                end: 1
+                            }
+                        }:null
                     }
                 ]
             };
@@ -107,6 +114,8 @@ define(function (require, exports, module) {
                 pos.sticky = null;
             }
         }
+
+        let savedCopyFn;
 
         beforeAll(async function () {
             testWindow = await SpecRunnerUtils.createTestWindowAndRun({forceReload: true});
@@ -120,20 +129,22 @@ define(function (require, exports, module) {
             CodeInspection = brackets.test.CodeInspection;
             PreferencesManager = brackets.test.PreferencesManager;
             CodeInspection.toggleEnabled(true);
-
             await SpecRunnerUtils.loadProjectInTestWindow(testFolder);
+            savedCopyFn = testWindow.Phoenix.app.copyToClipboard;
         }, 30000);
 
         beforeEach(function () {
             // this is to make the tests run faster
             prefs.set(CodeInspection._PREF_ASYNC_TIMEOUT, 500);
+            testWindow.Phoenix.app.copyToClipboard = savedCopyFn;
         });
 
-        afterEach(function () {
-            testWindow.closeAllFiles();
+        afterEach(async function () {
+            await testWindow.closeAllFiles();
         });
 
         afterAll(async function () {
+            testWindow.Phoenix.app.copyToClipboard = savedCopyFn;
             testWindow    = null;
             $             = null;
             brackets      = null;
@@ -517,17 +528,47 @@ define(function (require, exports, module) {
                 expect(marks[0].className).toBe("editor-text-fragment-warn");
             });
 
-            it("should show warning gutter icon on line in editor", async function () {
-                let codeInspector = createCodeInspector("javascript linter", failLintResult());
+            async function _testWarningIcon(lintResult, expectedClass) {
+                let codeInspector = createCodeInspector("javascript linter", lintResult);
                 CodeInspection.register("javascript", codeInspector);
 
                 await awaitsForDone(SpecRunnerUtils.openProjectFiles(["errors.js"]), "open test file", 5000);
 
                 expect($("#problems-panel").is(":visible")).toBe(true);
                 let marks = EditorManager.getActiveEditor().getGutterMarker(1, CodeInspection.CODE_INSPECTION_GUTTER);
-                expect(marks.title).toBe('\nSome errors here and there at column: 4');
+                expect(marks.title).toBe('Some errors here and there at column: 4');
                 marks = $(marks);
-                expect(marks.find('span').hasClass('line-icon-problem_type_warning')).toBeTrue();
+                expect(marks.find('span').hasClass(expectedClass)).toBeTrue();
+                return marks;
+            }
+
+            it("should show warning gutter icon on line in editor", async function () {
+                await _testWarningIcon(failLintResult(), 'line-icon-problem_type_warning');
+            });
+
+            it("should show fix icon in gutter for warning on line in editor", async function () {
+                const marks = await _testWarningIcon(failLintResult(true), 'line-icon-problem_type_warning');
+                expect(marks.find('span').hasClass('fa-wrench')).toBeTrue();
+                const $problemLineInPanel = CodeInspection.scrollToProblem(1);
+                expect($problemLineInPanel.find("i").hasClass("fa-wrench")).toBeTrue();
+            });
+
+            it("should show fix icon in gutter for error on line in editor", async function () {
+                const errorResult = failLintResult(true);
+                errorResult.errors[0].type = CodeInspection.Type.ERROR;
+                const marks = await _testWarningIcon(errorResult, 'line-icon-problem_type_error');
+                expect(marks.find('span').hasClass('fa-wrench')).toBeTrue();
+                const $problemLineInPanel = CodeInspection.scrollToProblem(1);
+                expect($problemLineInPanel.find("i").hasClass("fa-wrench")).toBeTrue();
+            });
+
+            it("should show fix icon in gutter and panel for info on line in editor", async function () {
+                const errorResult = failLintResult(true);
+                errorResult.errors[0].type = CodeInspection.Type.META;
+                const marks = await _testWarningIcon(errorResult, 'line-icon-problem_type_info');
+                expect(marks.find('span').hasClass('fa-wrench')).toBeTrue();
+                const $problemLineInPanel = CodeInspection.scrollToProblem(1);
+                expect($problemLineInPanel.find("i").hasClass("fa-wrench")).toBeTrue();
             });
 
             it("should not show codeinspection gutter on unsupported languages", async function () {
@@ -805,7 +846,7 @@ define(function (require, exports, module) {
 
                 await awaitsForDone(SpecRunnerUtils.openProjectFiles(["errors.js"]), "open test file", 5000);
 
-                var $inspectorSections = $(".inspector-section td");
+                var $inspectorSections = $(".inspector-section");
                 expect($inspectorSections.length).toEqual(2);
                 expect($inspectorSections[0].innerHTML.lastIndexOf("javascript linter 1 (1)")).not.toBe(-1);
                 expect($inspectorSections[1].innerHTML.lastIndexOf("javascript linter 2 (1)")).not.toBe(-1);
@@ -814,8 +855,8 @@ define(function (require, exports, module) {
                 expect($expandedInspectorSections.length).toEqual(2);
             });
 
-            it("should display no header section when only one linter has errors", async function () {
-                var codeInspector1 = createCodeInspector("javascript linter 1", failLintResult()),
+            async function _validateNoHeader(withFix) {
+                var codeInspector1 = createCodeInspector("javascript linter 1", failLintResult(withFix)),
                     codeInspector2 = createCodeInspector("javascript linter 2", {errors: []}),  // 1st way of reporting 0 errors
                     codeInspector3 = createCodeInspector("javascript linter 3", null);          // 2nd way of reporting 0 errors
                 CodeInspection.register("javascript", codeInspector1);
@@ -826,6 +867,14 @@ define(function (require, exports, module) {
 
                 expect($("#problems-panel").is(":visible")).toBe(true);
                 expect($(".inspector-section").is(":visible")).toBeFalsy();
+            }
+
+            it("should display no header section when only one linter has errors", async function () {
+                await _validateNoHeader();
+            });
+
+            it("should display no header section when only one linter has errors with fixes", async function () {
+                await _validateNoHeader(true);
             });
 
             it("should only display header sections for linters with errors", async function () {
@@ -842,7 +891,7 @@ define(function (require, exports, module) {
 
                 expect($("#problems-panel").is(":visible")).toBe(true);
 
-                var $inspectorSections = $(".inspector-section td");
+                var $inspectorSections = $(".inspector-section");
                 expect($inspectorSections.length).toEqual(2);
                 expect($inspectorSections[0].innerHTML.indexOf("javascript linter 1 (1)")).not.toBe(-1);
                 expect($inspectorSections[1].innerHTML.indexOf("javascript linter 4 (1)")).not.toBe(-1);
@@ -875,13 +924,30 @@ define(function (require, exports, module) {
                 await awaitsForDone(SpecRunnerUtils.openProjectFiles(["errors.js"]), "open test file");
 
                 var $problemPanelTitle = $("#problems-panel .title").text();
-                expect($problemPanelTitle).toBe(StringUtils.format(Strings.SINGLE_ERROR, "JavaScript Linter"));
+                expect($problemPanelTitle).toBe(StringUtils.format(Strings.SINGLE_ERROR, "JavaScript Linter", "errors.js"));
 
                 var $statusBar = $("#status-inspection");
                 expect($statusBar.is(":visible")).toBe(true);
 
                 var tooltip = $statusBar.attr("title");
-                var expectedTooltip = buildTooltip(StringUtils.format(Strings.SINGLE_ERROR, "JavaScript Linter"), 1);
+                var expectedTooltip = buildTooltip(StringUtils.format(Strings.SINGLE_ERROR, "JavaScript Linter", "errors.js"), 1);
+                expect(tooltip).toBe(expectedTooltip);
+            });
+
+            it("should show the error count and the name of the linter in the panel title for one error", async function () {
+                var codeInspector = createCodeInspector("JavaScript Linter", failLintResult(true));
+                CodeInspection.register("javascript", codeInspector);
+
+                await awaitsForDone(SpecRunnerUtils.openProjectFiles(["errors.js"]), "open test file");
+
+                var $problemPanelTitle = $("#problems-panel .title").text();
+                expect($problemPanelTitle).toBe(StringUtils.format(Strings.SINGLE_ERROR_FIXABLE, "JavaScript Linter", 1, "errors.js"));
+
+                var $statusBar = $("#status-inspection");
+                expect($statusBar.is(":visible")).toBe(true);
+
+                var tooltip = $statusBar.attr("title");
+                var expectedTooltip = buildTooltip(StringUtils.format(Strings.SINGLE_ERROR_FIXABLE, "JavaScript Linter", 1, "errors.js"), 1);
                 expect(tooltip).toBe(expectedTooltip);
             });
 
@@ -907,13 +973,59 @@ define(function (require, exports, module) {
                 await awaitsForDone(SpecRunnerUtils.openProjectFiles(["errors.js"]), "open test file");
 
                 var $problemPanelTitle = $("#problems-panel .title").text();
-                expect($problemPanelTitle).toBe(StringUtils.format(Strings.MULTIPLE_ERRORS, "JavaScript Linter", 2));
+                expect($problemPanelTitle).toBe(StringUtils.format(Strings.MULTIPLE_ERRORS, 2, "JavaScript Linter", "errors.js"));
 
                 var $statusBar = $("#status-inspection");
                 expect($statusBar.is(":visible")).toBe(true);
 
                 var tooltip = $statusBar.attr("title");
-                var expectedTooltip = buildTooltip(StringUtils.format(Strings.MULTIPLE_ERRORS, "JavaScript Linter", 2), 2);
+                var expectedTooltip = buildTooltip(StringUtils.format(Strings.MULTIPLE_ERRORS, 2, "JavaScript Linter", "errors.js"), 2);
+                expect(tooltip).toBe(expectedTooltip);
+            });
+
+            it("should show the error count and the name of the linter in the panel title and tooltip for multiple errors with fixes", async function () {
+                var lintResult = {
+                    errors: [
+                        {
+                            pos: { line: 1, ch: 3 },
+                            message: "Some errors here and there",
+                            type: CodeInspection.Type.WARNING,
+                            fix: {
+                                replaceText: "",
+                                rangeOffset: {
+                                    start: 0,
+                                    end: 1
+                                }
+                            }
+                        },
+                        {
+                            pos: { line: 1, ch: 5 },
+                            message: "Some errors there and there and over there",
+                            type: CodeInspection.Type.WARNING,
+                            fix: {
+                                replaceText: "",
+                                rangeOffset: {
+                                    start: 0,
+                                    end: 1
+                                }
+                            }
+                        }
+                    ]
+                };
+
+                var codeInspector = createCodeInspector("JavaScript Linter", lintResult);
+                CodeInspection.register("javascript", codeInspector);
+
+                await awaitsForDone(SpecRunnerUtils.openProjectFiles(["errors.js"]), "open test file");
+
+                var $problemPanelTitle = $("#problems-panel .title").text();
+                expect($problemPanelTitle).toBe(StringUtils.format(Strings.MULTIPLE_ERRORS_FIXABLE, 2, "JavaScript Linter", 2, "errors.js"));
+
+                var $statusBar = $("#status-inspection");
+                expect($statusBar.is(":visible")).toBe(true);
+
+                var tooltip = $statusBar.attr("title");
+                var expectedTooltip = buildTooltip(StringUtils.format(Strings.MULTIPLE_ERRORS_FIXABLE, 2, "JavaScript Linter", 2, "errors.js"), 2);
                 expect(tooltip).toBe(expectedTooltip);
             });
 
@@ -928,14 +1040,36 @@ define(function (require, exports, module) {
                 await awaitsForDone(SpecRunnerUtils.openProjectFiles(["errors.js"]), "open test file");
 
                 var $problemPanelTitle = $("#problems-panel .title").text();
-                expect($problemPanelTitle).toBe(StringUtils.format(Strings.ERRORS_PANEL_TITLE_MULTIPLE, 2));
+                expect($problemPanelTitle).toBe(StringUtils.format(Strings.ERRORS_PANEL_TITLE_MULTIPLE, 2, "errors.js"));
 
                 var $statusBar = $("#status-inspection");
                 expect($statusBar.is(":visible")).toBe(true);
 
                 var tooltip = $statusBar.attr("title");
                 // tooltip will contain + in the title if the inspection was aborted
-                var expectedTooltip = buildTooltip(StringUtils.format(Strings.ERRORS_PANEL_TITLE_MULTIPLE, 2), 2);
+                var expectedTooltip = buildTooltip(StringUtils.format(Strings.ERRORS_PANEL_TITLE_MULTIPLE, 2, "errors.js"), 2);
+                expect(tooltip).toBe(expectedTooltip);
+            });
+
+            it("should show the generic panel title if more than one inspector reported problems with fixes", async function () {
+                var lintResult = failLintResult(true);
+
+                var codeInspector1 = createCodeInspector("JavaScript Linter1", lintResult);
+                CodeInspection.register("javascript", codeInspector1);
+                var codeInspector2 = createCodeInspector("JavaScript Linter2", lintResult);
+                CodeInspection.register("javascript", codeInspector2);
+
+                await awaitsForDone(SpecRunnerUtils.openProjectFiles(["errors.js"]), "open test file");
+
+                var $problemPanelTitle = $("#problems-panel .title").text();
+                expect($problemPanelTitle).toBe(StringUtils.format(Strings.ERRORS_PANEL_TITLE_MULTIPLE_FIXABLE, 2, 2, "errors.js"));
+
+                var $statusBar = $("#status-inspection");
+                expect($statusBar.is(":visible")).toBe(true);
+
+                var tooltip = $statusBar.attr("title");
+                // tooltip will contain + in the title if the inspection was aborted
+                var expectedTooltip = buildTooltip(StringUtils.format(Strings.ERRORS_PANEL_TITLE_MULTIPLE_FIXABLE, 2, 2,"errors.js"), 2);
                 expect(tooltip).toBe(expectedTooltip);
             });
 
@@ -979,6 +1113,26 @@ define(function (require, exports, module) {
                 expect(fixPos(EditorManager.getActiveEditor().getCursorPos())).toEqual(fixPos({line: 1, ch: 3}));
             });
 
+            it("should be able to copy problem message", async function () {
+                const codeInspector = createCodeInspector("javascript linter", failLintResult());
+                CodeInspection.register("javascript", codeInspector);
+
+                await awaitsForDone(SpecRunnerUtils.openProjectFiles(["errors.js"]), "open test file");
+
+                const $problemLine = CodeInspection.scrollToProblem(1);
+                let copiedVal;
+                testWindow.Phoenix.app.copyToClipboard = function (val) {
+                    copiedVal = val;
+                };
+                const $copyBtnElems = $problemLine.find(".ph-copy-problem");
+                expect($copyBtnElems.length >= 1).toBeTrue();
+                for(let i=0; i<$copyBtnElems.length; i++) {
+                    copiedVal = null;
+                    $copyBtnElems[i].click();
+                    expect(copiedVal).toBe("Some errors here and there");
+                }
+            });
+
             it("should Go to First Error with errors from two providers", async function () {
                 var codeInspector1 = createCodeInspector("javascript linter 1", {
                     errors: [
@@ -1008,6 +1162,48 @@ define(function (require, exports, module) {
                 expect(fixPos(EditorManager.getActiveEditor().getCursorPos())).toEqual(fixPos({line: 1, ch: 3}));
             });
 
+            it("should not show providers that returns isIgnored", async function () {
+                var codeInspector1 = createCodeInspector("javascript linter x", {
+                    isIgnored: true
+                });
+                const linterName = "javascript linter y";
+                var codeInspector2 = createCodeInspector(linterName, {
+                    errors: [
+                        {
+                            pos: { line: 0, ch: 2 },
+                            message: "Different error",
+                            type: CodeInspection.Type.WARNING
+                        }
+                    ]
+                });
+                CodeInspection.register("javascript", codeInspector1);
+                CodeInspection.register("javascript", codeInspector2);
+
+                await awaitsForDone(SpecRunnerUtils.openProjectFiles(["errors.js"]), "open test file");
+
+                const $problemPanelTitle = $("#problems-panel .title").text();
+                expect($problemPanelTitle).toBe(StringUtils.format(Strings.SINGLE_ERROR, linterName, "errors.js"));
+
+                var $statusBar = $("#status-inspection");
+                expect($statusBar.is(":visible")).toBe(true);
+            });
+
+            it("should not show no error if all isIgnored", async function () {
+                var codeInspector1 = createCodeInspector("javascript linter x", {
+                    isIgnored: true
+                });
+                const linterName = "javascript linter y";
+                var codeInspector2 = createCodeInspector(linterName, {
+                    isIgnored: true
+                });
+                CodeInspection.register("javascript", codeInspector1);
+                CodeInspection.register("javascript", codeInspector2);
+
+                await awaitsForDone(SpecRunnerUtils.openProjectFiles(["errors.js"]), "open test file");
+
+                expect($("#status-inspection").hasClass("inspection-disabled")).toBeTrue();
+            });
+
             it("should handle missing or negative line numbers gracefully (https://github.com/adobe/brackets/issues/6441)", async function () {
                 var codeInspector1 = createCodeInspector("NoLineNumberLinter", {
                     errors: [
@@ -1035,13 +1231,13 @@ define(function (require, exports, module) {
 
                 await awaits(100);
                 var $problemPanelTitle = $("#problems-panel .title").text();
-                expect($problemPanelTitle).toBe(StringUtils.format(Strings.ERRORS_PANEL_TITLE_MULTIPLE, 2));
+                expect($problemPanelTitle).toBe(StringUtils.format(Strings.ERRORS_PANEL_TITLE_MULTIPLE, 2, "errors.js"));
 
                 var $statusBar = $("#status-inspection");
                 expect($statusBar.is(":visible")).toBe(true);
 
                 var tooltip = $statusBar.attr("title");
-                var expectedTooltip = buildTooltip(StringUtils.format(Strings.ERRORS_PANEL_TITLE_MULTIPLE, 2), 2);
+                var expectedTooltip = buildTooltip(StringUtils.format(Strings.ERRORS_PANEL_TITLE_MULTIPLE, 2, "errors.js"), 2);
                 expect(tooltip).toBe(expectedTooltip);
             });
 
@@ -1071,7 +1267,7 @@ define(function (require, exports, module) {
                 expect($problemsPanel.is(":visible")).toBe(true);
 
                 var $problemsPanelTitle = $("#problems-panel .title").text();
-                expect($problemsPanelTitle).toBe(StringUtils.format(Strings.SINGLE_ERROR, "SlowAsyncLinter"));
+                expect($problemsPanelTitle).toBe(StringUtils.format(Strings.SINGLE_ERROR, "SlowAsyncLinter", "errors.js"));
 
                 var $problemsReported = $("#problems-panel .bottom-panel-table .line-text");
                 expect($problemsReported.length).toBe(1);
@@ -1101,7 +1297,7 @@ define(function (require, exports, module) {
                 expect($problemsPanel.is(":visible")).toBe(true);
 
                 var $problemsPanelTitle = $("#problems-panel .title").text();
-                expect($problemsPanelTitle).toBe(StringUtils.format(Strings.SINGLE_ERROR, providerName));
+                expect($problemsPanelTitle).toBe(StringUtils.format(Strings.SINGLE_ERROR, providerName, "errors.js"));
 
                 var $problemsReported = $("#problems-panel .bottom-panel-table .line-text");
                 expect($problemsReported.length).toBe(1);
@@ -1127,7 +1323,7 @@ define(function (require, exports, module) {
                 expect($problemsPanel.is(":visible")).toBe(true);
 
                 var $problemsPanelTitle = $("#problems-panel .title").text();
-                expect($problemsPanelTitle).toBe(StringUtils.format(Strings.SINGLE_ERROR, providerName));
+                expect($problemsPanelTitle).toBe(StringUtils.format(Strings.SINGLE_ERROR, providerName, "errors.js"));
 
                 var $problemsReported = $("#problems-panel .bottom-panel-table .line-text");
                 expect($problemsReported.length).toBe(1);

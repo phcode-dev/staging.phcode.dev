@@ -81,6 +81,7 @@ define(function (require, exports, module) {
     require("spec/ViewUtils-test");
     require("spec/XMLUtils-test");
     require("spec/CodeInspection-integ-test");
+    require("spec/CodeInspection-fix-integ-test");
     require("spec/CodeHint-integ-test");
     require("spec/CSSInlineEdit-integ-test");
     require("spec/DocumentCommandHandlers-integ-test");
@@ -120,8 +121,11 @@ define(function (require, exports, module) {
     require("spec/Extn-RemoteFileAdapter-integ-test");
     require("spec/Extn-NavigationAndHistory-integ-test");
     require("spec/Extn-RecentProjects-integ-test");
+    require("spec/Extn-JSHint-integ-test");
+    require("spec/Extn-ESLint-integ-test");
     // extension integration tests
     require("spec/Extn-CSSCodeHints-integ-test");
+    require("spec/Extn-HTMLCodeHints-Lint-integ-test");
     // Node Tests
     require("spec/NodeConnection-test");
     // todo TEST_MODERN

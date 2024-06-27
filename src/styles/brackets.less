@@ -160,67 +160,26 @@ html, body {
 // selectors like .warning or .info. Even if error, warning, and info are used on the same div in any order,
 // the style for .error.error will take precedence due to its higher specificity.
 .editor-text-fragment-error.editor-text-fragment-error.editor-text-fragment-error.editor-text-fragment-error{
-    border-bottom:2px dotted @error-underline-text;
-    display: inline-block;
-    position: relative;
+    padding-bottom: 1px;
+    background: url('images/wavy-error.svg') repeat-x bottom left;
 }
 
-.editor-text-fragment-error.editor-text-fragment-error.editor-text-fragment-error.editor-text-fragment-error:after{
-    content: '';
-    width: 100%;
-    border-bottom:2px dotted @error-underline-text;
-    position: absolute;
-    display:block;
-    bottom: -3px;
-    left: 2px;
+.editor-text-fragment-warn.editor-text-fragment-warn.editor-text-fragment-warn {
+    padding-bottom: 1px;
+    background: url('images/wavy-warn.svg') repeat-x bottom left;
+    .dark &{
+        background: url('images/wavy-warn-dark.svg') repeat-x bottom left;
+    }
 }
 
-.editor-text-fragment-warn.editor-text-fragment-warn.editor-text-fragment-warn{
-    border-bottom:2px dotted @warn-underline-text;
-    display: inline-block;
-    position: relative;
+.editor-text-fragment-spell-error.editor-text-fragment-spell-error {
+    padding-bottom: 1px;
+    background: url('images/wavy-spell-error.svg') repeat-x bottom left;
 }
 
-.editor-text-fragment-warn.editor-text-fragment-warn.editor-text-fragment-warn:after{
-    content: '';
-    width: 100%;
-    border-bottom:2px dotted @warn-underline-text;
-    position: absolute;
-    display:block;
-    bottom: -3px;
-    left: 2px;
-}
-
-.editor-text-fragment-info{
-    border-bottom:2px dotted @info-underline-text;
-    display: inline-block;
-    position: relative;
-}
-
-.editor-text-fragment-info:after{
-    content: '';
-    width: 100%;
-    border-bottom:2px dotted @info-underline-text;
-    position: absolute;
-    display:block;
-    bottom: -3px;
-    left: 2px;
-}
-
-.editor-text-fragment-spell-error.editor-text-fragment-spell-error{
-    border-bottom:2px dotted @spell-underline-text;
-    display: inline-block;
-    position: relative;
-}
-
-.editor-text-fragment-spell-error.editor-text-fragment-spell-error:after{
-    content: '';
-    width: 100%;
-    border-bottom:2px dotted @spell-underline-text;
-    position: absolute;
-    display:block;
-    bottom: -3px;
-    left: 2px;
+.editor-text-fragment-info {
+    padding-bottom: 1px;
+    background: url('images/wavy-info.svg') repeat-x bottom left;
 }
 
 .hidden-element{
@@ -1993,6 +1952,12 @@ a, img {
     margin-bottom: 5px;
 }
 
+.quick-view-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
 #quick-view-container.active {
     transform: scale(1);
     opacity: 1;
@@ -2021,7 +1986,10 @@ a, img {
 }
 
 .quick-view-highlight {
-    background-color: rgba(200, 200, 150, 0.4);
+    background-color: rgba(200, 200, 150, 0.4) !important;
+    .dark &{
+        background-color: rgba(150, 150, 50, 0.3) !important;
+    }
 }
 
 // selection view
@@ -2910,7 +2878,7 @@ textarea.exclusions-editor {
     cursor: default;
     width: 13px;
 
-    &.inspection-errors {
+    &.inspection-errors, &.inspection-repair {
         cursor: pointer;
     }
 }
@@ -2923,11 +2891,15 @@ textarea.exclusions-editor {
     background: url(images/topcoat-warning-15.svg) 9px 5px no-repeat;
 }
 
-.inspection-errors:hover {
+.inspection-repair {
+    background: url(images/topcoat-repair-15.svg) 9px 5px no-repeat;
+}
+
+.inspection-errors:hover, .inspection-repair:hover {
     background-color: rgba(0, 0, 0, 0.03);
 }
 
-.inspection-errors:active {
+.inspection-errors:active, .inspection-repair:active {
     background-color: rgba(0, 0, 0, 0.05);
 }
 
@@ -2999,13 +2971,20 @@ textarea.exclusions-editor {
 
     .table-copy-err-button {
         visibility: hidden;
-        cursor: pointer;
         margin: 0 0 0 0;
     }
 
     .inspector-line:hover .table-copy-err-button {
         visibility: visible;
     }
+}
+
+.code-inspection-quick-view-item .copy-qv-error-text-btn {
+    visibility: hidden;
+}
+
+.code-inspection-quick-view-item:hover .copy-qv-error-text-btn {
+    visibility: visible;
 }
 
 /* Line up label text and input text */

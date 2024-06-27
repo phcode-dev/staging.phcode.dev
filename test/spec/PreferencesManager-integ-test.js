@@ -102,17 +102,19 @@ define(function (require, exports, module) {
             // there will be an error in problems panel if both present
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(".phcode.json"));
             await awaitsFor(()=>{
-                return testWindow.$("#problems-panel").text().includes(Strings.ERROR_PREFS_PROJECT_LINT_MESSAGE);
+                return testWindow.$("#problems-panel").is(":visible") &&
+                    testWindow.$("#problems-panel").text().includes(Strings.ERROR_PREFS_PROJECT_LINT_MESSAGE);
             }, "problem panel on .phcode.json");
 
             await awaitsForDone(SpecRunnerUtils.openProjectFiles("test.json"));
             await awaitsFor(()=>{
-                return !testWindow.$("#problems-panel").text().includes(Strings.ERROR_PREFS_PROJECT_LINT_MESSAGE);
+                return !testWindow.$("#problems-panel").is(":visible");
             }, "problem panel should not be there for normal test.json file");
 
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(".brackets.json"));
             await awaitsFor(()=>{
-                return testWindow.$("#problems-panel").text().includes(Strings.ERROR_PREFS_PROJECT_LINT_MESSAGE);
+                return testWindow.$("#problems-panel").is(":visible") &&
+                    testWindow.$("#problems-panel").text().includes(Strings.ERROR_PREFS_PROJECT_LINT_MESSAGE);
             }, "problem panel on .brackets.json");
         });
 

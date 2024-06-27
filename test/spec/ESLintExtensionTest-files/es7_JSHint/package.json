@@ -1,0 +1,12 @@
+{
+  "name": "misc",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {},
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "eslint": "7.0.0"
+  }
+}

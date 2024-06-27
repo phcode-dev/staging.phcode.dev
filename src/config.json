@@ -4,6 +4,7 @@
         "app_name_about": "Phoenix Code",
         "about_icon": "styles/images/phoenix-icon.svg",
         "how_to_use_url": "https://github.com/adobe/brackets/wiki/How-to-Use-Brackets",
+        "docs_url": "https://docs.phcode.dev/",
         "support_url": "https://github.com/phcode-dev/phoenix/discussions",
         "suggest_feature_url": "https://github.com/phcode-dev/phoenix/discussions/categories/ideas",
         "get_involved_url": "https://github.com/phcode-dev/phoenix/discussions/77",
@@ -11,6 +12,7 @@
         "homepage_url": "https://phcode.io",
         "update_download_page": "https://phcode.io/",
         "twitter_url": "https://twitter.com/phcodedev",
+        "youtube_url": "https://www.youtube.com/channel/UCNK2a8DKqPQQe3GlfTk-RHg",
         "troubleshoot_url": "https://github.com/adobe/brackets/wiki/Troubleshooting#wiki-livedev",
         "twitter_name": "@phcodedev",
         "contributors_url": "https://api.github.com/repos/phcode-dev/phoenix/contributors?per_page={0}&page={1}",
@@ -23,7 +25,7 @@
         "app_notification_url": "https://updates.phcode.io/appNotifications/staging/",
         "app_update_url": "https://updates.phcode.io/tauri/update-latest-pre-release.json",
         "linting.enabled_by_default": true,
-        "build_timestamp": "2024-05-25T13:20:01.664Z",
+        "build_timestamp": "2024-06-27T06:01:18.219Z",
         "googleAnalyticsID": "G-FP5S9BKDSJ",
         "googleAnalyticsIDDesktop": "G-D5R1Y6PTS8",
         "mixPanelID": "a7e08ffd43c37767c29b13df1d2e6c62",
@@ -35,8 +37,8 @@
         "bugsnagEnv": "staging"
     },
     "name": "Phoenix Code",
-    "version": "3.7.3-20322",
-    "apiVersion": "3.7.3",
+    "version": "3.8.5-20444",
+    "apiVersion": "3.8.5",
     "homepage": "https://core.ai",
     "issues": {
         "url": "https://github.com/phcode-dev/phoenix/issues"
