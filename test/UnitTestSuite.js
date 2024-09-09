@@ -116,6 +116,8 @@ define(function (require, exports, module) {
     require("spec/file-encoding-integ-test");
     require("spec/StateManager-test");
     require("spec/TaskManager-integ-test");
+    require("spec/Generic-integ-test");
+    require("spec/spacing-auto-detect-integ-test");
     // Integrated extension tests
     require("spec/Extn-InAppNotifications-integ-test");
     require("spec/Extn-RemoteFileAdapter-integ-test");
@@ -126,6 +128,7 @@ define(function (require, exports, module) {
     // extension integration tests
     require("spec/Extn-CSSCodeHints-integ-test");
     require("spec/Extn-HTMLCodeHints-Lint-integ-test");
+    require("spec/Extn-HtmlTagSyncEdit-integ-test");
     // Node Tests
     require("spec/NodeConnection-test");
     // todo TEST_MODERN

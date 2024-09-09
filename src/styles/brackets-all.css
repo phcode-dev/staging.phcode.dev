@@ -6328,14 +6328,18 @@ body.tauri #titlebar .dirty-dot {
   margin-left: 15px;
   /* Spacing between the icon and the shortcut text */
 }
-.menuAnchor.selected .menu-shortcut:not(.fixed-shortcut) {
+.menuAnchor:hover .menu-shortcut:not(.fixed-shortcut) {
   display: none;
 }
-.menuAnchor.selected .keyboard-icon {
+.menuAnchor.use-invisible-for-width-compute:hover .menu-shortcut:not(.fixed-shortcut) {
+  visibility: hidden;
+  display: unset;
+}
+.menuAnchor:hover .keyboard-icon {
   cursor: pointer;
   visibility: visible;
 }
-.menuAnchor.selected .keyboard-icon:hover {
+.menuAnchor:hover .keyboard-icon:hover {
   color: #74B120;
 }
 /* Context menu styles */
@@ -9830,15 +9834,29 @@ body.dark {
 .editor-text-fragment-matching-refs {
   background-color: #cfead6;
 }
+.editor-text-tag-sync-underline {
+  text-decoration-style: double;
+  text-decoration-line: underline;
+  text-decoration-skip-ink: none;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 1px;
+  text-decoration-color: #1474bf;
+}
 .editor-text-rename-outline {
-  border-top: 2px #1474bf solid;
-  border-bottom: 2px #1474bf solid;
+  border-top: 1px #1474bf solid;
+  border-bottom: 1px #1474bf solid;
 }
 .editor-text-rename-outline-left {
-  border-left: 2px #1474bf solid;
+  box-shadow: inset 1px 0 0 0 #1474bf;
+  /* Left shadow */
 }
 .editor-text-rename-outline-right {
-  border-right: 2px #1474bf solid;
+  box-shadow: inset -1px 0 0 0 #1474bf;
+  /* right shadow */
+}
+.editor-text-rename-outline-left.editor-text-rename-outline-right {
+  box-shadow: inset 1px 0 0 0 #1474bf, inset -1px 0 0 0 #1474bf;
+  /* Left, right shadow */
 }
 .editor-text-fragment-error.editor-text-fragment-error.editor-text-fragment-error.editor-text-fragment-error {
   padding-bottom: 1px;
@@ -10046,12 +10064,14 @@ img {
   display: none;
 }
 #indent-type,
+#indent-auto,
 #indent-width-label {
   cursor: pointer;
   margin-right: 3px;
 }
 #status-overwrite:hover,
 #indent-type:hover,
+#indent-auto:hover,
 #indent-width-label:hover {
   text-decoration: underline;
 }
