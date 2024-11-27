@@ -5708,6 +5708,7 @@ a.badge:focus {
 /* Brackets Variables */
 :root {
   --z-index-parameter-hints: 19;
+  --editor-line-height: 1.5;
 }
 /* All paddings, gutters, etc. should be multiples of this */
 /* Common font sizes */
@@ -8320,37 +8321,6 @@ code {
  * with system and css color names. (We define our own colors because system
  * colors are ugly.)
  */
-/*
-// Copyright (c) 2021 - present core.ai . All rights reserved.
-// Original work Copyright (c) 2012 - 2021 Adobe Systems Incorporated. All rights reserved.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the "Software"),
-// to deal in the Software without restriction, including without limitation
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,
-// and/or sell copies of the Software, and to permit persons to whom the
-// Software is furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-// DEALINGS IN THE SOFTWARE.
- * Brackets Colors
- *
- * These are general purpose colors that can be used in defining
- * themes or UI elements. you can override these by overriding the :root{} element
- * with your own variable definitions in the theme css.
- * All brackets color variable names (that refer to an actual color)
- * are prefixed with "bc-" for "brackets". This is to avoid confusion
- * with system and css color names. (We define our own colors because system
- * colors are ugly.)
- */
 :root {
   --bc-toast-danger-bg-color: #FF5C33;
   --bc-toast-error-bg-color: #f74687;
@@ -8371,7 +8341,7 @@ code {
 }
 .CodeMirror {
   color: #535353;
-  line-height: 1.25;
+  line-height: var(--editor-line-height);
   font-family: "SourceCodePro-Medium", "ＭＳ ゴシック", "MS Gothic", monospace;
 }
 .dark .CodeMirror {
@@ -8644,6 +8614,20 @@ span.cm-strong {
 span.cm-emstrong {
   font-style: normal;
   font-weight: normal;
+}
+.cm-phcode-indent-guides::before {
+  content: " ";
+  width: 1px;
+  display: inline-block;
+  position: relative;
+  border-left: 1px solid rgba(128, 128, 128, 0.3);
+}
+.cm-phcode-indent-guides-none::before {
+  content: " ";
+  width: 1px;
+  display: inline-block;
+  position: relative;
+  border-left: 1px solid transparent;
 }
 /*
  * GNU AGPL-3.0 License
@@ -9977,9 +9961,8 @@ img {
 }
 #status-info {
   color: #333;
-  left: 10px;
-  position: absolute;
   white-space: nowrap;
+  cursor: pointer;
 }
 .dark #status-info {
   color: #ccc;
@@ -9996,7 +9979,8 @@ img {
 .hide-status-indicators > *:not(.global-indicator) {
   display: none !important;
 }
-#status-indicators {
+#status-indicators,
+#status-phoenix {
   background: #fff;
   color: #333;
   position: absolute;
@@ -10005,31 +9989,38 @@ img {
   white-space: nowrap;
   /* dropdown button styling */
 }
-.dark #status-indicators {
+.dark #status-indicators,
+.dark #status-phoenix {
   background: #1c1c1e;
   color: #ccc;
 }
-#status-indicators > div {
+#status-indicators > div,
+#status-phoenix > div {
   border-left: 1px solid rgba(0, 0, 0, 0.09);
   float: right;
   padding: 0 10px;
 }
-.dark #status-indicators > div {
+.dark #status-indicators > div,
+.dark #status-phoenix > div {
   border-left: 1px solid #343434;
 }
-#status-indicators .spinner {
+#status-indicators .spinner,
+#status-phoenix .spinner {
   margin: 6px -5px;
   padding: 0;
 }
-#status-indicators #status-language {
+#status-indicators #status-language,
+#status-phoenix #status-language {
   border-right: 1px solid rgba(0, 0, 0, 0.09);
   padding: 0;
   margin: 0;
 }
-.dark #status-indicators #status-language {
+.dark #status-indicators #status-language,
+.dark #status-phoenix #status-language {
   border-right: 1px solid #343434;
 }
-#status-indicators .btn-status-bar {
+#status-indicators .btn-status-bar,
+#status-phoenix .btn-status-bar {
   border: 0;
   background-color: inherit;
   color: inherit;
@@ -10045,17 +10036,45 @@ img {
   box-shadow: none;
   text-shadow: none;
 }
-#status-indicators .btn-status-bar:focus {
+#status-indicators .btn-status-bar:focus,
+#status-phoenix .btn-status-bar:focus {
   outline: 0;
 }
-#status-indicators .btn-status-bar[disabled] {
+#status-indicators .btn-status-bar[disabled],
+#status-phoenix .btn-status-bar[disabled] {
   cursor: inherit;
   background: none;
   text-decoration: none;
 }
-#status-indicators .btn-status-bar::after {
+#status-indicators .btn-status-bar::after,
+#status-phoenix .btn-status-bar::after {
   top: 10px;
   right: 8px;
+}
+#status-phoenix {
+  right: unset;
+  left: 0;
+}
+#status-phoenix > div {
+  border-left: unset;
+  border-right: 1px solid rgba(0, 0, 0, 0.09);
+  float: left;
+  padding: unset;
+  width: 35px;
+  text-align: center;
+}
+.dark #status-phoenix > div {
+  border-left: unset;
+  border-right: 1px solid #343434;
+}
+#status-menu:hover,
+.status-tab:hover {
+  background-color: #f0f0f0;
+  cursor: pointer;
+}
+.dark #status-menu:hover,
+.dark .status-tab:hover {
+  background-color: rgba(255, 255, 255, 0.05);
 }
 #status-indent > * {
   display: inline-block;
@@ -11345,7 +11364,7 @@ img {
   position: fixed;
   top: -10000px;
   color: #535353;
-  line-height: 1.25;
+  line-height: var(--editor-line-height);
   font-family: "SourceCodePro-Medium", "ＭＳ ゴシック", "MS Gothic", monospace;
 }
 .dark .dummy-text {
@@ -12014,7 +12033,7 @@ textarea.exclusions-editor {
   margin-top: 5px;
   margin-bottom: 0;
   color: #535353;
-  line-height: 1.25;
+  line-height: var(--editor-line-height);
   font-family: "SourceCodePro-Medium", "ＭＳ ゴシック", "MS Gothic", monospace;
 }
 .dark textarea.exclusions-editor {
@@ -12547,6 +12566,16 @@ label input {
 }
 #hidden-editors {
   display: none;
+}
+.theme-settings .line-height-slider {
+  padding-top: 5px;
+}
+.theme-settings .fontLineHeightSlider {
+  width: 220px;
+}
+.theme-settings .fontLineHeightValue {
+  margin-left: 3px;
+  padding-top: 5px;
 }
 .theme-settings td {
   padding: 2px;

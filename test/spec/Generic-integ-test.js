@@ -19,7 +19,7 @@
  *
  */
 
-/*global describe, path, it, expect, awaitsForDone, beforeAll, afterAll */
+/*global describe, path, it, expect, awaitsForDone, beforeAll, afterAll, awaitsFor */
 
 define(function (require, exports, module) {
 
@@ -30,6 +30,7 @@ define(function (require, exports, module) {
         MainViewManager,      // loaded from brackets.test
         CommandManager,
         Commands,
+        __PR,
         SpecRunnerUtils  = require("spec/SpecRunnerUtils");
 
 
@@ -48,6 +49,7 @@ define(function (require, exports, module) {
             MainViewManager = testWindow.brackets.test.MainViewManager;
             CommandManager = testWindow.brackets.test.CommandManager;
             Commands = testWindow.brackets.test.Commands;
+            __PR = testWindow.__PR;
         }, 30000);
 
         afterAll(async function () {
@@ -58,6 +60,7 @@ define(function (require, exports, module) {
             MainViewManager = null;
             CommandManager = null;
             Commands = null;
+            __PR = null;
             await SpecRunnerUtils.closeTestWindow();
         }, 30000);
 
@@ -72,6 +75,120 @@ define(function (require, exports, module) {
         async function _reopenClosedFile() {
             await awaitsForDone(CommandManager.execute(Commands.FILE_REOPEN_CLOSED));
         }
+
+        describe("Indent Guides", function () {
+            let currentProjectPath;
+            beforeAll(async function () {
+                // Working set behavior is sensitive to whether file lives in the project or outside it, so make
+                // the project root a known quantity.
+                currentProjectPath = await SpecRunnerUtils.getTestPath("/spec/space-detect-test-files");
+                await SpecRunnerUtils.loadProjectInTestWindow(currentProjectPath);
+            });
+
+            async function verify(fileName, expectedIndentLines) {
+                const isChecked = CommandManager.get(Commands.TOGGLE_INDENT_GUIDES).getChecked();
+                if(!isChecked){
+                    await awaitsForDone(CommandManager.execute(Commands.TOGGLE_INDENT_GUIDES));
+                }
+                await _openProjectFile(fileName);
+                await awaitsFor(function () {
+                    const _isChecked = CommandManager.get(Commands.TOGGLE_INDENT_GUIDES).getChecked();
+                    return _isChecked &&
+                        _$("#first-pane .cm-phcode-indent-guides:visible").length === expectedIndentLines;
+                }, ()=>{
+                    return `Indent guides tobe ${expectedIndentLines} but got
+                     ${_$("#first-pane .cm-phcode-indent-guides:visible").length}`;
+                });
+                await awaitsForDone(CommandManager.execute(Commands.TOGGLE_INDENT_GUIDES));
+                await awaitsFor(function () {
+                    const _isChecked = CommandManager.get(Commands.TOGGLE_INDENT_GUIDES).getChecked();
+                    return !_isChecked && _$("#first-pane .cm-phcode-indent-guides:visible").length === 0;
+                }, ()=>{
+                    return `Indent guides to go, but got ${_$("#first-pane .cm-phcode-indent-guides:visible").length}`;
+                });
+                await awaitsForDone(CommandManager.execute(Commands.TOGGLE_INDENT_GUIDES));
+                await awaitsFor(function () {
+                    const _isChecked = CommandManager.get(Commands.TOGGLE_INDENT_GUIDES).getChecked();
+                    return _isChecked &&
+                        _$("#first-pane .cm-phcode-indent-guides:visible").length === expectedIndentLines;
+                }, ()=>{
+                    return `Guides to be back ${expectedIndentLines} but got
+                     ${_$("#first-pane .cm-phcode-indent-guides:visible").length}`;
+                });
+            }
+
+            it("should show and toggle indent guides with 1 space file", async function () {
+                await verify("space-1.js", 1);
+            });
+
+            it("should show and toggle indent guides with 12 space file", async function () {
+                await verify("space-12.js", 2);
+            });
+
+            it("should show and toggle indent guides with no space file", async function () {
+                await verify("space-none.js", 0);
+            });
+
+            it("should show and toggle indent guides with 2 tabs", async function () {
+                await verify("tab-2.js", 2);
+            });
+
+            it("should show and toggle indent guides with 12 tabs", async function () {
+                await verify("tab-12.js", 12);
+            });
+        });
+
+        describe("Theme settings", function () {
+            let currentProjectPath;
+            beforeAll(async function () {
+                currentProjectPath = await SpecRunnerUtils.getTestPath("/spec/EditorOptionHandlers-test-files");
+                await SpecRunnerUtils.loadProjectInTestWindow(currentProjectPath);
+                await _openProjectFile("test.html");
+            });
+
+            it("should preview line height changes on slider input and restore original on cancel", async function () {
+                await __PR.execCommand(__PR.Commands.CMD_THEMES_OPEN_SETTINGS);
+                await __PR.waitForModalDialog(".themeSettings");
+                const currentLineHeight = getComputedStyle(__PR.$(".CodeMirror-scroll")[0]).lineHeight;
+                __PR.$('.fontLineHeightSlider').val(2).trigger('input');
+                let newLineHeight = getComputedStyle(__PR.$(".CodeMirror-scroll")[0]).lineHeight;
+                __PR.validateNotEqual(currentLineHeight, newLineHeight);
+
+                __PR.clickDialogButtonID(__PR.Dialogs.DIALOG_BTN_CANCEL);
+                await __PR.waitForModalDialogClosed(".themeSettings");
+                await __PR.awaitsFor(()=>{
+                    const lineHeight = getComputedStyle(__PR.$(".CodeMirror-scroll")[0]).lineHeight;
+                    return currentLineHeight === lineHeight;
+                }, "Waiting for font size to be restored on cancel");
+            });
+
+            it("should save and apply line height changes", async function () {
+                await __PR.execCommand(__PR.Commands.CMD_THEMES_OPEN_SETTINGS);
+                await __PR.waitForModalDialog(".themeSettings");
+                const originalLineHeight = getComputedStyle(__PR.$(".CodeMirror-scroll")[0]).lineHeight;
+                const originalVal = __PR.$('.fontLineHeightSlider').val();
+                __PR.$('.fontLineHeightSlider').val(2).trigger('input');
+                let newLineHeight = getComputedStyle(__PR.$(".CodeMirror-scroll")[0]).lineHeight;
+                __PR.validateNotEqual(originalLineHeight, newLineHeight);
+                __PR.clickDialogButtonID("save");
+                await __PR.waitForModalDialogClosed(".themeSettings");
+
+                // now open theme settings again and restore old line height
+                await __PR.execCommand(__PR.Commands.CMD_THEMES_OPEN_SETTINGS);
+                await __PR.waitForModalDialog(".themeSettings");
+                __PR.validateEqual(__PR.$('.fontLineHeightSlider').val(), "2");
+                __PR.$('.fontLineHeightSlider').val(originalVal).trigger('input');
+                newLineHeight = getComputedStyle(__PR.$(".CodeMirror-scroll")[0]).lineHeight;
+                __PR.validateEqual(originalLineHeight, newLineHeight);
+                __PR.clickDialogButtonID("save");
+                await __PR.waitForModalDialogClosed(".themeSettings");
+
+                await __PR.awaitsFor(()=>{
+                    newLineHeight = getComputedStyle(__PR.$(".CodeMirror-scroll")[0]).lineHeight;
+                    return originalLineHeight === newLineHeight;
+                }, "Waiting for font size to be restored on cancel");
+            });
+        });
 
         describe("reopen closed files test", function () {
             let currentProjectPath;
