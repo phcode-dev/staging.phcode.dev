@@ -42,6 +42,7 @@
 @import "Extn-NavigationAndHistory.less";
 @import "Extn-RecentProjects.less";
 @import "Extn-DisplayShortcuts.less";
+@import "Extn-CSSColorPreview.less";
 
 /* Overall layout */
 
@@ -367,7 +368,7 @@ a, img {
     /* dropdown button styling */
     .btn-status-bar {
         border: 0;
-        background-color: inherit;
+        background-color: unset;
         color: inherit;
         font: inherit;
         height: inherit;
@@ -405,23 +406,31 @@ a, img {
         border-right: 1px solid @bc-panel-border;
 
         .dark & {
-            border-left: unset;
             border-right: 1px solid @dark-bc-panel-separator;
         }
         float: left;
-        padding: unset;
-        width: 35px;
         text-align: center;
+    }
+    > div:hover{
+        background-color: @bc-status-btn-hover;
+        .dark & {
+            background-color: @dark-bc-status-btn-hover;
+        }
+        cursor: pointer;
+    }
+    > div:only-child {
+        border-right: unset;
     }
 }
 
-
-#status-menu:hover, .status-tab:hover{
-    background-color: @bc-status-btn-hover;
-    .dark & {
-        background-color: @dark-bc-status-btn-hover;
+#status-indicators {
+    > div:hover{
+        background-color: @bc-status-btn-hover;
+        .dark & {
+            background-color: @dark-bc-status-btn-hover;
+        }
+        cursor: pointer;
     }
-    cursor: pointer;
 }
 
 #status-indent > * {
@@ -471,7 +480,6 @@ a, img {
 }
 
 #status-overwrite {
-    transition: background-color 3s;
     background-color: rgba(255, 255, 255, 0);
     color: @bc-text;
     cursor: pointer;
@@ -620,8 +628,24 @@ a, img {
 }
 
 #status-overwrite.flash {
-    transition: background-color 1s;
-    background-color: rgb(120, 178, 242);
+    animation: brightenFade 2s ease-in-out;
+}
+
+@keyframes brightenFade {
+    0% {
+        background-color: transparent;
+    }
+    15% {
+        background-color: rgb(120, 178, 242);
+        color: black;
+    }
+    30% {
+        background-color: rgb(120, 178, 242);
+        color: black;
+    }
+    100% {
+        background-color: transparent;
+    }
 }
 
 
@@ -1048,11 +1072,11 @@ a, img {
         }
 
         tr.selected td {
-            background-color: @bc-panel-bg-selected;
+            background-color: @bc-panel-bg-selected-table;
             color: @bc-text-thin;
 
             .dark & {
-                background-color: @dark-bc-panel-bg-selected;
+                background-color: @dark-bc-panel-bg-selected-table;
                 color: @dark-bc-text-thin;
             }
         }
@@ -1324,10 +1348,11 @@ a, img {
     display: flex;
     align-items: center;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
-    padding: 8px 0 9px 12px;
+    padding: 6px 0 6px 12px;
     font-size: 15px;
     color: @project-panel-text-2;
     overflow: hidden;
+    gap: .5em;
 
     .btn-alt-quiet {
         background-color: #47484b;
@@ -1339,7 +1364,8 @@ a, img {
 }
 
 #project-operations-spinner{
-    margin-right: 7px;
+    margin-right: 5px;
+    margin-top: 0;
 }
 
 .open-files-container {
@@ -2961,6 +2987,7 @@ textarea.exclusions-editor {
 .CodeMirror .code-inspection-gutter {
     width: 1em;
     background-color: transparent;
+    text-align: center;
 }
 
 .brackets-inspection-gutter-marker {
@@ -2969,7 +2996,7 @@ textarea.exclusions-editor {
     line-height: 1em;
     height: 1em;
     width: 1em;
-    font-size: .8em;
+    font-size: .7em;
     pointer-events: auto;
 }
 
@@ -3188,35 +3215,35 @@ label input {
     color: black; // text color
 }
 
-.notification-popup-container.style-danger {
+.notification-ui-tooltip.style-danger, .notification-ui-arrow.style-danger, .notification-popup-container.style-danger {
     background: var(--bc-toast-danger-bg-color);
     a {
         color: white;
         cursor: pointer;
     }
 }
-.notification-popup-container.style-error {
+.notification-ui-tooltip.style-error, .notification-ui-arrow.style-error, .notification-popup-container.style-error {
     background: var(--bc-toast-error-bg-color);
     a {
         color: white;
         cursor: pointer;
     }
 }
-.notification-popup-container.style-info {
+.notification-ui-tooltip.style-info, .notification-ui-arrow.style-info, .notification-popup-container.style-info {
     background: var(--bc-toast-info-bg-color);
     a {
         color: blue;
         cursor: pointer;
     }
 }
-.notification-popup-container.style-success {
+.notification-ui-tooltip.style-success, .notification-ui-arrow.style-success, .notification-popup-container.style-success {
     background: var(--bc-toast-success-bg-color);
     a {
         color: darkblue;
         cursor: pointer;
     }
 }
-.notification-popup-container.style-warning {
+.notification-ui-tooltip.style-warning, .notification-ui-arrow.style-warning, .notification-popup-container.style-warning {
     background: var(--bc-toast-warning-bg-color);
     a {
         color: white;
@@ -3240,12 +3267,16 @@ label input {
 }
 
 .notification-popup-close-button {
-    font-size: 16px;
+    font-size: 24px;
     font-weight: 900;
     position: absolute;
     top: 0;
     right: 8px;
     cursor: pointer;
+    color: @notification-text;
+}
+.notification-popup-close-button.arrow {
+    top: 8px;
 }
 .notification-popup-close-button:hover {
     color: white;
@@ -3253,11 +3284,17 @@ label input {
 
 .notification-dialog-title {
     font-size: 16px;
-    font-weight: bold;
+    font-weight: 500;
+    padding-right: 25px;
 }
 
 .notification-dialog-content a {
-    color: #00ccff;
+    a {
+        color: @bc-text-beige;
+    }
+    a:hover {
+        color: @bc-text-alt;
+    }
 }
 
 .github-stars-button {
@@ -3522,3 +3559,19 @@ label input {
     }
 }
 
+.new-project-modal-dialog{
+    background-color:#3C3F41;
+    width: 750px;
+    height: 570px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between
+}
+
+.notification-popup-container.survey-notification-big {
+    margin-left: -274px;
+    background-color: #f3f5f9; // match with survey planet
+    .notification-popup-close-button:hover {
+        color: @bc-primary-btn-border-focused-glow;
+    }
+}

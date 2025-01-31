@@ -909,6 +909,12 @@ img {
     margin-bottom: 30px;
 }
 
+.project-bottom {
+    border-top: 3px solid rgba(255, 255, 255, 0.1);
+    padding-top: 20px;
+    margin-top: auto;
+}
+
 .new-project-content {
     overflow-y: auto;
 }
@@ -1114,14 +1120,21 @@ img {
     top: 0;
     left: 0;
     background: #fd7e14;
-    color: white;
+    color: black;
     padding: 5px;
     border-radius: 4px;
     opacity: 0;
     font-size: 13px;
     font-weight: 500;
+    max-width: 300px;
     font-style: normal;
     font-stretch: normal;
+    a {
+        color: #333;
+    }
+    a:hover {
+        color: white;
+    }
 }
 .notification-ui-hidden {
     opacity: 0;

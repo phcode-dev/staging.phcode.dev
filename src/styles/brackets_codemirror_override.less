@@ -271,7 +271,9 @@ div.CodeMirror-cursors {
         }
     }
 
-    .CodeMirror-matchingtag { background: @matching-bracket; }
+    .CodeMirror-matchingtag:not(.CodeMirror-searching) {
+        background: @matching-bracket;
+    }
 }
 
 /*

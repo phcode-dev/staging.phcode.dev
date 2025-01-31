@@ -449,7 +449,13 @@ define(function (require, exports, module) {
                 });
             });
 
-            describe("getCursorPos", function () {
+            describe("getCursorPos and getLine", function () {
+                it("should getLine work correctly", function () {
+                    expect(myEditor.getLine(0)).toEqual("this is line 0");
+                    expect(myEditor.getLine(10000)).toEqual(null);
+                    expect(myEditor.getLine(-1)).toEqual(null);
+                });
+
                 it("should return a single cursor", function () {
                     myEditor._codeMirror.setCursor(0, 2);
                     expect(myEditor.getCursorPos().line).toEqual(0);
@@ -2084,7 +2090,8 @@ define(function (require, exports, module) {
             var leftGutter = "left",
                 rightGutter = "right",
                 lineNumberGutter = "CodeMirror-linenumbers",
-                codeInspectionGutter = "code-inspection-gutter";
+                codeInspectionGutter = "code-inspection-gutter",
+                colorGutter = "CodeMirror-colorGutter";
 
             beforeEach(function () {
                 createTestEditor("hello\nworld\nyo", "javascript");
@@ -2110,7 +2117,7 @@ define(function (require, exports, module) {
                     return gutter.name;
                 });
                 expect(gutters).toEqual(expectedGutters);
-                expect(registeredGutters).toEqual([...expectedGutters, codeInspectionGutter]);
+                expect(registeredGutters).toEqual([...expectedGutters, colorGutter, codeInspectionGutter]);
             });
 
             it("should isGutterRegistered work on multiple gutters", function () {
@@ -2121,26 +2128,28 @@ define(function (require, exports, module) {
             });
 
             it("should return gutters registered with the same priority in insertion order", function () {
-                var secondRightGutter = "second-right";
+                const secondRightGutter = "second-right";
                 Editor.registerGutter(secondRightGutter, 101);
-                var expectedGutters = [leftGutter, lineNumberGutter, rightGutter, secondRightGutter];
-                var gutters  = myEditor._codeMirror.getOption("gutters");
-                var registeredGutters = Editor.getRegisteredGutters().map(function (gutter) {
+                const expectedGutters = [leftGutter, lineNumberGutter, rightGutter, secondRightGutter];
+                const gutters  = myEditor._codeMirror.getOption("gutters");
+                const registeredGutters = Editor.getRegisteredGutters().map(function (gutter) {
                     return gutter.name;
                 });
                 expect(gutters).toEqual(expectedGutters);
                 expect(registeredGutters).toEqual(expectedGutters);
             });
 
-            it("should have only gutters registered with the intended languageIds ", function () {
-                var lessOnlyGutter = "less-only-gutter";
+            it("should have only gutters registered with the intended languageIds, test isGutterActive", function () {
+                const lessOnlyGutter = "less-only-gutter";
                 Editor.registerGutter(lessOnlyGutter, 101, ["less"]);
-                var expectedGutters = [leftGutter, lineNumberGutter, rightGutter];
-                var expectedRegisteredGutters = [leftGutter, lineNumberGutter, rightGutter, lessOnlyGutter];
-                var gutters  = myEditor._codeMirror.getOption("gutters");
-                var registeredGutters = Editor.getRegisteredGutters().map(function (gutter) {
+                const expectedGutters = [leftGutter, lineNumberGutter, rightGutter];
+                const expectedRegisteredGutters = [leftGutter, lineNumberGutter, rightGutter, lessOnlyGutter];
+                const gutters  = myEditor._codeMirror.getOption("gutters");
+                const registeredGutters = Editor.getRegisteredGutters().map(function (gutter) {
                     return gutter.name;
                 });
+                expect(myEditor.isGutterActive(lessOnlyGutter)).toBeFalse();
+                expect(myEditor.isGutterActive(leftGutter)).toBeTrue();
                 expect(gutters).toEqual(expectedGutters);
                 expect(registeredGutters).toEqual(expectedRegisteredGutters);
             });
@@ -2149,9 +2158,9 @@ define(function (require, exports, module) {
                 Editor.unregisterGutter(leftGutter);
                 Editor.unregisterGutter(rightGutter);
                 Editor.registerGutter(leftGutter, 1);
-                var expectedGutters = [leftGutter, lineNumberGutter];
-                var gutters  = myEditor._codeMirror.getOption("gutters");
-                var registeredGutters = Editor.getRegisteredGutters().map(function (gutter) {
+                const expectedGutters = [leftGutter, lineNumberGutter];
+                const gutters  = myEditor._codeMirror.getOption("gutters");
+                const registeredGutters = Editor.getRegisteredGutters().map(function (gutter) {
                     return gutter.name;
                 });
                 expect(gutters).toEqual(expectedGutters);
@@ -2447,6 +2456,33 @@ define(function (require, exports, module) {
                 myEditor.clearAllMarks();
                 mark = myEditor.getAllMarks();
                 expect(mark.length).toBe(0);
+            });
+
+            it("should clearAllMarks clear marks with and without markType on given line only", function () {
+                myEditor.markToken("token", {line: 0, ch: 1});
+                myEditor.markToken("token", {line: 1, ch: 1});
+
+                let mark = myEditor.getAllMarks();
+                expect(mark.length).toBe(2);
+                expect([mark[0].type, mark[1].type].includes("range")).toBeTrue();
+
+                // clear mark without markType
+                myEditor.clearAllMarks(null, [0]);
+                mark = myEditor.getAllMarks();
+                expect(mark.length).toBe(1);
+                expect(mark[0].type).toBe("range");
+                expect(mark[0].find().from.line).toBe(1);
+
+                // mark again
+                myEditor.markToken("token", {line: 3, ch: 1});
+                myEditor.markToken("markToDelete", {line: 2, ch: 1});
+                myEditor.clearAllMarks("markToDelete", [2]);
+                mark = myEditor.getAllMarks();
+                expect(mark.length).toBe(2);
+                expect(mark[0].type).toBe("range");
+                expect(mark[1].type).toBe("range");
+                expect(mark[0].find().from.line).toBe(1);
+                expect(mark[1].find().from.line).toBe(3);
             });
 
             it("should clearAllMarks clear bookmarks and range marks with markType", function () {

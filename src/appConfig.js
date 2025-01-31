@@ -26,7 +26,7 @@ window.AppConfig = {
         "app_notification_url": "https://updates.phcode.io/appNotifications/staging/",
         "app_update_url": "https://updates.phcode.io/tauri/update-latest-pre-release.json",
         "linting.enabled_by_default": true,
-        "build_timestamp": "2024-11-27T04:52:31.526Z",
+        "build_timestamp": "2025-01-31T11:01:11.482Z",
         "googleAnalyticsID": "G-FP5S9BKDSJ",
         "googleAnalyticsIDDesktop": "G-D5R1Y6PTS8",
         "mixPanelID": "a7e08ffd43c37767c29b13df1d2e6c62",
@@ -38,8 +38,8 @@ window.AppConfig = {
         "bugsnagEnv": "staging"
     },
     "name": "Phoenix Code",
-    "version": "3.10.1-20683",
-    "apiVersion": "3.10.1",
+    "version": "4.0.4-20879",
+    "apiVersion": "4.0.4",
     "homepage": "https://core.ai",
     "issues": {
         "url": "https://github.com/phcode-dev/phoenix/issues"

@@ -6,10 +6,6 @@
         {
             "key": "Ctrl-Tab",
             "platform": "mac"
-        },
-        {
-            "key": "Cmd-Shift-]",
-            "platform": "mac"
         }
     ],
     "recent-files.prev":  [
@@ -19,22 +15,44 @@
         {
             "key": "Ctrl-Shift-Tab",
             "platform": "mac"
-        },
-        {
-            "key": "Cmd-Shift-[",
-            "platform": "mac"
         }
     ],
     "navigation.jump.back":  [
         {
             "key": "Alt-Left",
-            "displayKey": "Alt-←"
+            "displayKey": "Alt-←",
+            "platform": "win"
+        },
+        {
+            "key": "Cmd-Alt-Left",
+            "displayKey": "Cmd-Alt-←",
+            "platform": "mac",
+            "nativeOnly": true
+        },
+        {
+            "key": "Ctrl-Alt-Left",
+            "displayKey": "Ctrl-Alt-←",
+            "platform": "mac",
+            "browserOnly": true
         }
     ],
     "navigation.jump.fwd":  [
         {
             "key": "Alt-Right",
-            "displayKey": "Alt-→"
+            "displayKey": "Alt-→",
+            "platform": "win"
+        },
+        {
+            "key": "Cmd-Alt-Right",
+            "displayKey": "Cmd-Alt-→",
+            "platform": "mac",
+            "nativeOnly": true
+        },
+        {
+            "key": "Ctrl-Alt-Right",
+            "displayKey": "Ctrl-Alt-→",
+            "platform": "mac",
+            "browserOnly": true
         }
     ]
 }
