@@ -2,7 +2,10 @@
     <div id="live-preview-plugin-toolbar" class="plugin-toolbar" style="display: flex; align-items: center; flex-direction: row;">
         <div style="width: 20%;display: flex;">
             <button id="reloadLivePreviewButton" title="{{clickToReload}}" class="btn-alt-quiet toolbar-button reload-icon"></button>
-            <button id="highlightLPButton" title="{{toggleLiveHighlight}}" class="btn-alt-quiet toolbar-button pointer-fill-icon"></button>
+	        <button id="previewModeLivePreviewButton" title="{{clickToPreview}}" class="btn-alt-quiet toolbar-button">
+	            <i class="fa-solid fa-play"></i>
+	        </button>
+            <button id="livePreviewModeBtn" title="{{livePreviewConfigureModes}}" class="btn-alt-quiet toolbar-button btn-dropdown btn"><!-- Content will come here dynamically --></button>
         </div>
         <div style="width: fit-content;min-width: 60%;display: flex;justify-content: center; align-items: center;">
 <!--            these are buttons that are always invisible to help central align the panel title-->
@@ -53,6 +56,10 @@
         <i class="fa fa-close custom-server-banner-close-icon"
            style="margin-left: 10px;margin-right: 10px;cursor: pointer;"
            title="{{Strings.CLOSE}}"></i>
+    </div>
+    <div class="live-preview-status-overlay forced-hidden">
+        <span class="live-preview-overlay-message"><!-- the msg will come here dynamically --></span>
+        <i class="fa fa-times live-preview-overlay-close" title="{{Strings.LIVE_PREVIEW_HIDE_OVERLAY}}"></i>
     </div>
     <div class="frame-container">
         <div style="width: 3px;"></div>

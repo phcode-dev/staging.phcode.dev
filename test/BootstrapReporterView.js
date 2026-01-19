@@ -30,6 +30,32 @@ define(function (require, exports, module) {
 
     var _ = require("thirdparty/lodash");
 
+    function formatMilliseconds(ms) {
+        const hours = Math.floor(ms / (1000 * 60 * 60));
+        const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((ms % (1000 * 60)) / 1000);
+
+        let result = '';
+
+        if (hours) {
+            result = result + `${hours}-Hour `;
+        }
+        if (minutes) {
+            result = result + `${minutes}-Minutes `;
+        }
+        result = `${result}${seconds}-Seconds`;
+
+        return result.trim();
+    }
+
+    function formatElapsedTime(ms) {
+        const totalSeconds = Math.floor(ms / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
     function _addPrintableContainer() {
         var container = $(`
 <div>
@@ -236,17 +262,40 @@ define(function (require, exports, module) {
         }
     };
 
-    BootstrapReporterView.prototype._handleRunnerEnd = function (event, reporter) {
+    BootstrapReporterView.prototype._handleRunnerEnd = function (event, reporter, runnerResult) {
+        // Stop the running timer and mark as completed
+        if (this.runningTimer) {
+            clearInterval(this.runningTimer);
+            this.runningTimer = null;
+
+            // Show final time with completed status
+            if (this.$timer && this.testStartTime) {
+                const finalTime = formatElapsedTime(Date.now() - this.testStartTime);
+                this.$timer.text('🏁 ' + finalTime + ' (Completed)');
+                this.$timer.css('color', '#28a745'); // green color for completed
+            }
+            this.testStartTime = null;
+        }
+
         if (this.$info) {
             this.$info.toggleClass("alert-info", false);
 
             window.testResults.passed = reporter.passed;
+
+            // Get total time from the reporter's runInfo if available
+            let totalTime = null;
+            if (runnerResult && runnerResult.totalTime) {
+                totalTime = runnerResult.totalTime;
+            }
+
+            let timeText = totalTime ? ` (Done in ${formatMilliseconds(totalTime)})` : '';
+
             if (reporter.passed) {
-                this.$info.toggleClass("alert-success", true).text("Complete. No failures.");
+                this.$info.toggleClass("alert-success", true).text("Complete. No failures." + timeText);
             } else {
                 this.$info.toggleClass("alert-error", true).text(
                     "Complete. See failures Below. If all tests have passed and no failures are seen below," +
-                    "Check the debug console for errors. (search for 'Spec Error:' , 'Suite Error:' or Runner Error: in console)");
+                    "Check the debug console for errors. (search for 'Spec Error:' , 'Suite Error:' or Runner Error: in console)" + timeText);
             }
             window.playWrightRunComplete = true;
         }
@@ -260,6 +309,19 @@ define(function (require, exports, module) {
     };
 
     BootstrapReporterView.prototype._handleSpecStart = function (event, reporter, specName) {
+        // Create and start timer on first spec if not already created
+        if (!this.$timer && this.$info) {
+            this.$timer = $('<div style="text-align: right; font-family: monospace; color: #666; margin-bottom: 5px;">⏱️ 00:00:00</div>');
+            this.$timer.insertBefore(this.$info);
+
+            this.testStartTime = Date.now();
+            this.runningTimer = setInterval(() => {
+                if (this.$timer) {
+                    this.$timer.text('⏱️ ' + formatElapsedTime(Date.now() - this.testStartTime));
+                }
+            }, 1000);
+        }
+
         this.$info.text("Running " + specName);
     };
 

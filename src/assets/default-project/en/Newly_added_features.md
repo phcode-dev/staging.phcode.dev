@@ -7,13 +7,50 @@ We are continuously adding features every week to improve the life of web develo
 
 Here's a list of top features recently added to Phoenix:
 
-<h2><a target="_blank" href="https://docs.phcode.dev/docs/Features/git">Git for Desktop</a></h2>
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/live-preview-edit">Live Preview Edit</a></h2>
+
+`Added in 2025`
+
+Introducing the all-new Live Preview Edit - powerful, reliable editing directly inside your page preview.
+
+Edit content on the page, drag and rearrange elements visually, and inspect layouts with rulers. Try new layouts and
+make changes faster without breaking your flow. - Included with Phoenix Pro.
+
+![Image](https://docs-images.phcode.dev/in-app/pro-layoutRulers.png)
+
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/tab-bar">Tab Bar</a></h2>
+
+`Added in 2025`
+
+Tabs let you navigate between open files and easily reorder them with drag and drop.
+
+![Image](https://docs-images.phcode.dev/in-app/tab-bar.png)
+
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/emmet">Emmet</a></h2>
+
+`Added in 2025`
+
+Phoenix Code now includes built-in Emmet support for HTML and CSS workflows. Expand abbreviations instantly from code
+hints.
+
+![Image](https://docs-images.phcode.dev/in-app/emmet.jpg)
+
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/custom-snippets">Custom Snippets Panel</a></h2>
+
+`Added in 2025`
+
+Create, edit, search, and manage your own snippets using the Snippets panel. Snippets help you insert frequently
+used code fragments directly from code hints in the editor.
+
+![Image](https://docs-images.phcode.dev/in-app/snippets.png)
+
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/git">Git for Desktop</a></h2>
 
 `Added on January, 2025`
 
 Git is finally here.  Integrated Git source control with a clean, intuitive interface.
 Stage changes, commit, and sync with a single click while keeping your focus on the code.
-Now available in the Windows, Mac and Linux desktop apps of Phoenix code.
+Now available in the Windows, Mac, and Linux desktop apps of Phoenix code.
 
 
 ![Image](https://github.com/user-attachments/assets/aeacc7c0-3ee3-4a80-9b05-f2b48140bcdd)
@@ -21,7 +58,7 @@ Now available in the Windows, Mac and Linux desktop apps of Phoenix code.
 ![Image](https://github.com/user-attachments/assets/6e7b9faf-d57b-448b-a5bb-a111c67489b5)
 
 
-<h2><a target="_blank" href="https://docs.phcode.dev/docs/editing-colors#color-preview">Color Previews</a></h2>
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/color-preview">Color Previews</a></h2>
 
 `Added on December, 2024`
 
@@ -39,7 +76,7 @@ Windows, macOS, and Linux desktop apps!
 
 ![Image](https://github.com/user-attachments/assets/710330ae-8b34-4a51-a1f9-4c02736ed9bd)
 
-<h2><a target="_blank" href="https://docs.phcode.dev/docs/editing-text#line-height">Customizable Editor Line Height</a></h2>
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/extn-line-height">Customizable Editor Line Height</a></h2>
 
 `Added on November, 2024`
 
@@ -50,7 +87,7 @@ Also added a `Get More...` button to the Themes dialog, linking directly to the 
 
 ![image](https://github.com/user-attachments/assets/97a46d9a-e971-401d-8a77-015afa6d5972)
 
-<h2><a target="_blank" href="https://docs.phcode.dev/docs/editing-text#indent-guide-lines">Indent Guide Lines</a></h2>
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/indent-guide-lines">Indent Guide Lines</a></h2>
 
 `Added on October, 2024`
 
@@ -59,7 +96,7 @@ be toggled via `View > Indent Guide Lines`.
 
 ![image](https://github.com/user-attachments/assets/3d9d0c55-3c9e-4ab3-bbc0-53b563d19e39)
 
-<h2><a target="_blank" href="https://docs.phcode.dev/docs/editing-text/#auto-space-detection">Auto Tab and Spacing Detection</a></h2>
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/auto-space-detection">Auto Tab and Spacing Detection</a></h2>
 
 `Added on August, 2024`
 
@@ -67,7 +104,7 @@ Phoenix Code can now automatically detect and apply the indentation style (tabs 
 
 ![image](https://github.com/user-attachments/assets/0adc47c5-a561-4002-bffb-d7bcde999b9d)
 
-<h2><a target="_blank" href="https://docs.phcode.dev/docs/editing-text/#auto-rename-tag">Auto rename start and end of HTML/XML/SVG tags</a></h2>
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/auto-rename-tag">Auto rename start and end of HTML/XML/SVG tags</a></h2>
 
 `Added on July, 2024`
 
@@ -101,7 +138,7 @@ Code to open individual files. Drop a folder to open it as a project.
 
 ![drag and drop](https://github.com/phcode-dev/phoenix/assets/5336369/ddd96ff7-bc99-46a6-a62d-6f6f5b78438b)
 
-<h2><a target="_blank" href="https://docs.phcode.dev/docs/Features/Problems%20Panel/html-lint/">HTML Validation</a></h2>
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/html-lint">HTML Validation</a></h2>
 
 `Added on June, 2024`
 
@@ -110,7 +147,7 @@ unrecognized tags, and more.
 
 ![HTML validate](https://github.com/phcode-dev/phoenix/assets/5336369/5bc4a1cc-2429-477c-83ca-91f19dcc0b0f)
 
-<h2><a target="_blank" href="https://docs.phcode.dev/docs/Features/Problems%20Panel/ESLint/">ESLint Support</a></h2>
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/ESLint">ESLint Support</a></h2>
 
 `Added on June, 2024`
 
@@ -130,7 +167,7 @@ CSS files and inline CSS styles/class names in HTML files. This provides an inst
 
 ![classLiveHints](https://github.com/phcode-dev/phoenix/assets/5336369/502c8751-5269-4c34-9178-5ad08f8ad837)
 
-<h2><a target="_blank" href="https://docs.phcode.dev/docs/Features/Live%20Preview/live-preview-settings">Custom Live Preview Servers</a></h2>
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/live-preview-settings">Custom Live Preview Servers</a></h2>
 
 `Added on April, 2024`
 
@@ -154,7 +191,7 @@ detection for CSS, SCSS, and LESS files.
 ![image](https://github.com/phcode-dev/phoenix/assets/5336369/9c083bd3-9e34-418d-a1c8-c152393c37b2)
 
 
-<h2><a target="_blank" href="https://docs.phcode.dev/docs/Features/editor-rulers/">Editor Rulers</a></h2>
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/editor-rulers">Editor Rulers</a></h2>
 
 `Added on April, 2024`
 
@@ -163,7 +200,7 @@ lengths.
 
 ![image](https://github.com/phcode-dev/phoenix/assets/5336369/71b8b04c-d2ca-47b8-84bb-53cd0fb4593c)
 
-<h2><a target="_blank" href="https://docs.phcode.dev/docs/Features/find-in-files/">Search Filters - Advanced find in files</a></h2>
+<h2><a target="_blank" href="https://docs.phcode.dev/app-links/find-in-files">Search Filters - Advanced find in files</a></h2>
 
 `Added on March, 2024`
 
@@ -241,7 +278,7 @@ Creating extensions and themes is now easier than ever with a single click in Gi
 ## Beautify code
 `Added on August,2022`
 
-Beautify HTML, CSS, JS, Json, Markdown, Typescript and other language code with `Ctrl-B` (`Cmd-B` in mac.).
+Beautify HTML, CSS, JS, Json, Markdown, Typescript, and other language code with `Ctrl-B` (`Cmd-B` in mac.).
 
 #### Watch the video on YouTube
 <a href="http://www.youtube.com/watch?feature=player_embedded&v=DMMPfIuUGGs" target="_blank">

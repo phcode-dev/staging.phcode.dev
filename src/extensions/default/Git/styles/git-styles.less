@@ -292,6 +292,29 @@
 // codemirror
 // main: brackets-git.less
 
+.tickmark-track {
+    .brackets-git-added {
+        --mark-color: @git-green;
+        .dark & {
+            --mark-color: @dark-git-green;
+        }
+    }
+
+    .brackets-git-modified {
+        --mark-color: @git-orange;
+        .dark & {
+            --mark-color: @dark-git-orange;
+        }
+    }
+
+    .brackets-git-removed {
+        --mark-color: @git-red;
+        .dark & {
+            --mark-color: @dark-git-red;
+        }
+    }
+}
+
 .CodeMirror {
     .brackets-git-gutter {
         pointer-events: auto;
@@ -432,10 +455,8 @@
 
 #history-viewer {
     position: absolute;
-    top: 0px;
-    right: 0px;
-    bottom: 0px;
-    left: 0px;
+    inset: 0;
+    z-index: 2;
     overflow: hidden;
     background: @bc-panel-bg;
     .flex-box(column);
@@ -884,6 +905,7 @@
     white-space: nowrap;
     padding: 2px 5px;
     margin-left: -5px;
+    margin-right: 2em;
     .dropdown-arrow {
         display: inline-block;
         width: 7px;

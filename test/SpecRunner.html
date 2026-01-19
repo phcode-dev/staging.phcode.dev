@@ -148,6 +148,7 @@
   <!-- Import the phoenix browser virtual file system -->
   <script src="../src/phoenix/virtualfs.js"></script>
   <script src="../src/utils/EventDispatcher.js"></script>
+  <script src="../src/appConfig.js"></script>
 
   <script>
     // environment setup for boot. do not move out of index html!!
@@ -270,6 +271,7 @@
         isSpecRunnerWindow: window.location.pathname.endsWith("/SpecRunner.html"),
         firstBoot: false, // will be set below
         startTime: Date.now(),
+        pro: {},
         TRUSTED_ORIGINS: {
           // if modifying this list, make sure to update in https://github.com/phcode-dev/phcode.live/blob/main/docs/trustedOrigins.js
           // extensions may add their trusted origin to this list at any time.
@@ -293,6 +295,12 @@
       Phoenix.isSupportedBrowser = Phoenix.isNativeApp ||
               (Phoenix.browser.isDeskTop && ("serviceWorker" in navigator));
       window.testEnvironment = window.Phoenix.isTestWindow;
+      const healthDisabled = localStorage.getItem("PH_HEALTH_DISABLED");
+      window.Phoenix.healthTrackingDisabled = (healthDisabled === "true");
+      window.Phoenix._setHealthTrackingDisabled = function (isDisabled) {
+        window.Phoenix.healthTrackingDisabled = isDisabled;
+        localStorage.setItem("PH_HEALTH_DISABLED", String(isDisabled));
+      };
 
       // now setup PhoenixBaseURL, which if of the form https://phcode.dev/ or tauri://localhost/
       const url = new URL(window.location.href);
@@ -311,7 +319,7 @@
 
   <script src="../src/phoenix/shell.js" type="module"></script>
   <script src="virtual-server-loader.js" type="module"></script>
-  <script src="../src/node-loader.js"></script>
+  <script src="../src/node-loader.js" defer></script>
   <script src="../src/storage.js" type="module"></script>
 
   <link href="../src/thirdparty/bootstrap/bootstrap.min.css" rel="stylesheet">

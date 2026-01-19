@@ -41,8 +41,13 @@
 // Integrated extensions import
 @import "Extn-NavigationAndHistory.less";
 @import "Extn-RecentProjects.less";
+@import "Extn-TabBar.less";
 @import "Extn-DisplayShortcuts.less";
 @import "Extn-CSSColorPreview.less";
+@import "Extn-CustomSnippets.less";
+@import "Extn-CollapseFolders.less";
+@import "UserProfile.less";
+@import "phoenix-pro.less";
 
 /* Overall layout */
 
@@ -76,6 +81,15 @@ html, body {
 
 #phcode-io-main-nav{
     color: @dark-bc-text-link;
+}
+
+#phcode-io-main-nav.phoenix-pro{
+  background: @phoenix-pro-gradient-dark;
+  background-clip: text;
+  -webkit-background-clip: text; /* Chrome, Safari */
+  color: transparent;            /* works in Firefox */
+  -webkit-text-fill-color: transparent; /* Chrome, Safari */
+  display: inline-block;
 }
 
 #ctrl-nav-overlay {
@@ -667,8 +681,9 @@ a, img {
     background-image: url("images/share-fill.svg");
 }
 
-.help {
-    background-image: url("images/discuss-icon.svg");
+.user {
+    background: url("images/circle-user-solid.svg") center no-repeat;
+    background-size: 18px 18px;
 }
 
 #editor-holder {
@@ -1166,10 +1181,15 @@ a, img {
 
 #working-set-list-container {
     background: @bc-sidebar-bg;
+    display: block;
 
     > div:last-child ul {
         padding-bottom: 21px; // Adds working set bottom padding to the last UL.
     }
+}
+
+#working-set-list-container.working-set-hidden {
+    display: none !important;
 }
 
 .working-set-header {
@@ -2617,24 +2637,32 @@ textarea.exclusions-editor {
     width: 12px;
     z-index: @z-index-cm-max;
     pointer-events: none;
+    --mark-color: #eddd23;
 
     .tickmark {
         position: absolute;
         width: 12px;
-        height: 1px;
-        background-color: #eddd23;
-        border-top: 1px solid #e0d123;
-        border-bottom: 1px solid #d4c620;
+        height: 2px;
+        background-color: var(--mark-color);
+
         opacity: 0.85;  // allow thumb to show through
         &.tickmark-current {
             background-color: #ed9823;
-            border-top: 1px solid #dd9128;
-            border-bottom: 1px solid #cb8320;
             z-index: 1;  // ensure this one appears above overlapping sibling highlights
+            opacity: 1;
+        }
+
+        &.tickmark-side {
+            background-color: unset;
+            position: absolute;
+            width: 12px;
+            height: 5px;
+            border-left: 2px solid;
+            border-left-color: var(--mark-color);
+            opacity: 1;
         }
     }
 }
-
 
 /* Quick Open search bar & dropdown */
 
@@ -3194,6 +3222,7 @@ label input {
     flex-direction: column;
     z-index: 100;
     height: 100%;
+    pointer-events: none;
 }
 
 .notification-popup-container {
@@ -3209,6 +3238,7 @@ label input {
     /* animated properties */
     opacity: 0;
     transform: translateY(-50px);
+    pointer-events: all;
 }
 
 .notification-dialog-content strong {
@@ -3255,6 +3285,13 @@ label input {
     opacity: 1;
     transition: transform 500ms, opacity 500ms;
     transition-delay: 2s;
+    transform: translateY(0);
+}
+
+.notification-popup-container.instantOpen {
+    opacity: 1;
+    transition: transform 100ms, opacity 100ms;
+    transition-delay: 100ms;
     transform: translateY(0);
 }
 

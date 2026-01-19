@@ -19,7 +19,7 @@
  *
  */
 
-/*global describe, it, expect, beforeEach, afterEach, fs, path, Phoenix, jasmine*/
+/*global describe, it, expect, beforeEach, afterEach, fs, path, jasmine, expectAsync*/
 
 define(function (require, exports, module) {
     if(!window.__TAURI__) {
@@ -134,6 +134,192 @@ define(function (require, exports, module) {
                     await tauriWindows[i].close();
                 }
             }, 120000);
+        });
+
+        describe("Credentials OTP API Tests", function () {
+            const scopeName = "testScope";
+            const trustRing = window.specRunnerTestKernalModeTrust;
+            const TEST_TRUST_KEY_NAME = "testTrustKey";
+
+            function decryptCreds(creds) {
+                return trustRing.AESDecryptString(creds, trustRing.aesKeys.key, trustRing.aesKeys.iv);
+            }
+
+            beforeEach(async function () {
+                // Cleanup before running tests
+                await window.__TAURI__.invoke("delete_credential", { scopeName }).catch(() => {});
+            });
+
+            afterEach(async function () {
+                // Cleanup after tests
+                await window.__TAURI__.invoke("delete_credential", { scopeName }).catch(() => {});
+            });
+
+            if(Phoenix.isTestWindowGitHubActions && Phoenix.platform === "linux"){
+                // Credentials test doesn't work in GitHub actions in linux desktop as the runner cant reach key ring.
+                it("Should not run in github actions in linux desktop", async function () {
+                    expect(1).toEqual(1);
+                });
+                return;
+            }
+
+            describe("Credential Storage & OTP Generation", function () {
+                it("Should store credentials successfully", async function () {
+                    const randomUUID = crypto.randomUUID();
+                    await expectAsync(
+                        window.__TAURI__.invoke("store_credential", { scopeName, secretVal: randomUUID })
+                    ).toBeResolved();
+                });
+
+                it("Should get credentials as encrypted string", async function () {
+                    const randomUUID = crypto.randomUUID();
+                    await window.__TAURI__.invoke("store_credential", { scopeName, secretVal: randomUUID });
+
+                    const response = await window.__TAURI__.invoke("get_credential", { scopeName });
+                    expect(response).toBeDefined();
+                    expect(response).not.toEqual(randomUUID);
+                });
+
+                it("Should retrieve and decrypt set credentials with kernal mode keys", async function () {
+                    const randomUUID = crypto.randomUUID();
+                    await window.__TAURI__.invoke("store_credential", { scopeName, secretVal: randomUUID });
+
+                    const creds = await window.__TAURI__.invoke("get_credential", { scopeName });
+                    expect(creds).toBeDefined();
+                    const decryptedString = await decryptCreds(creds);
+                    expect(decryptedString).toEqual(randomUUID);
+                });
+
+                it("Should return an error if credentials do not exist", async function () {
+                    const response = await window.__TAURI__.invoke("get_credential", { scopeName });
+                    expect(response).toBeNull();
+                });
+
+                it("Should delete stored credentials", async function () {
+                    const randomUUID = crypto.randomUUID();
+                    await window.__TAURI__.invoke("store_credential", { scopeName, secretVal: randomUUID });
+
+                    // Ensure credential exists
+                    let creds = await window.__TAURI__.invoke("get_credential", { scopeName });
+                    expect(creds).toBeDefined();
+
+                    // Delete credential
+                    await expectAsync(
+                        window.__TAURI__.invoke("delete_credential", { scopeName })
+                    ).toBeResolved();
+
+                    // Ensure credential is deleted
+                    creds = await window.__TAURI__.invoke("get_credential", { scopeName });
+                    expect(creds).toBeNull();
+                });
+
+                it("Should handle deletion of non-existent credentials gracefully", async function () {
+                    let error;
+                    try {
+                        await window.__TAURI__.invoke("delete_credential", { scopeName });
+                    } catch (err) {
+                        error = err;
+                    }
+
+                    // The test should fail if no error was thrown
+                    expect(error).toBeDefined();
+
+                    // Check for OS-specific error messages
+                    const expectedErrors = [
+                        "No matching entry found in secure storage", // Common error on Linux/macOS
+                        "The specified item could not be found in the keychain", // macOS Keychain
+                        "Element not found" // Windows Credential Manager
+                    ];
+
+                    const isExpectedError = expectedErrors.some(msg => error.includes(msg));
+                    expect(isExpectedError).toBeTrue();
+                });
+
+                it("Should overwrite existing credentials when storing with the same scope", async function () {
+                    const oldUUID = crypto.randomUUID();
+                    await window.__TAURI__.invoke("store_credential", { scopeName, secretVal: oldUUID });
+
+                    let creds = await window.__TAURI__.invoke("get_credential", { scopeName });
+                    expect(creds).toBeDefined();
+                    let response = await decryptCreds(creds);
+                    expect(response).toEqual(oldUUID);
+
+                    // Store new credentials with the same scope
+                    const newUUID = crypto.randomUUID();
+                    await window.__TAURI__.invoke("store_credential", { scopeName, secretVal: newUUID });
+
+                    creds = await window.__TAURI__.invoke("get_credential", { scopeName });
+                    expect(creds).toBeDefined();
+                    response = await decryptCreds(creds);
+                    expect(response).toEqual(newUUID);
+                });
+
+                // trustRing.getCredential and set tests
+                async function setSomeKey() {
+                    const randomCred = crypto.randomUUID();
+                    await trustRing.setCredential(TEST_TRUST_KEY_NAME, randomCred);
+                    const savedCred = await trustRing.getCredential(TEST_TRUST_KEY_NAME);
+                    expect(savedCred).toEqual(randomCred);
+                    return savedCred;
+                }
+
+                it("Should get and set API key in kernal mode trust ring", async function () {
+                    await setSomeKey();
+                });
+
+                it("Should get and set empty string API key in kernal mode trust ring", async function () {
+                    const randomCred = "";
+                    await trustRing.setCredential(TEST_TRUST_KEY_NAME, randomCred);
+                    const savedCred = await trustRing.getCredential(TEST_TRUST_KEY_NAME);
+                    expect(savedCred).toEqual(randomCred);
+                });
+
+                it("Should remove API key in kernal mode trust ring work as expected", async function () {
+                    await setSomeKey();
+                    await trustRing.removeCredential(TEST_TRUST_KEY_NAME);
+                    const cred = await trustRing.getCredential(TEST_TRUST_KEY_NAME);
+                    expect(cred).toBeNull();
+                });
+
+                // trust key management
+                it("Should not be able to set trust key if one is already set", async function () {
+                    const kv = trustRing.generateRandomKeyAndIV();
+                    let error;
+                    try {
+                        await window.__TAURI__.tauri.invoke("trust_window_aes_key", kv);
+                    } catch (err) {
+                        error = err;
+                    }
+                    expect(error).toContain("Trust has already been established for this window.");
+                });
+
+                it("Should be able to remove trust key with key and iv", async function () {
+                    await window.__TAURI__.tauri.invoke("remove_trust_window_aes_key", trustRing.aesKeys);
+                    let error;
+                    try {
+                        await window.__TAURI__.tauri.invoke("remove_trust_window_aes_key", trustRing.aesKeys);
+                    } catch (err) {
+                        error = err;
+                    }
+                    expect(error).toContain("No trust association found for this window.");
+                    // reinstate trust
+                    await window.__TAURI__.tauri.invoke("trust_window_aes_key", trustRing.aesKeys);
+                });
+
+                it("Should getCredential not work without trust", async function () {
+                    await setSomeKey();
+                    await window.__TAURI__.tauri.invoke("remove_trust_window_aes_key", trustRing.aesKeys);
+                    let error;
+                    try {
+                        await trustRing.getCredential(TEST_TRUST_KEY_NAME);
+                    } catch (err) {
+                        error = err;
+                    }
+                    expect(error).toContain("Trust needs to be first established");
+                    // reinstate trust
+                    await window.__TAURI__.tauri.invoke("trust_window_aes_key", trustRing.aesKeys);
+                });
+            });
         });
     });
 });

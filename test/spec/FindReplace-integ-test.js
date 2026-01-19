@@ -126,7 +126,9 @@ define(function (require, exports, module) {
             }
 
             // Verify number of tickmarks equals number of highlights
-            var tickmarks = tw$(".tickmark-track .tickmark", myEditor.getRootElement());
+            var tickmarks = testWindow.brackets.test.ScrollTrackMarkers._getTickmarks(myEditor);
+            // we cannot compare the dom nodes like below as the algorithm will merge overlapping scrolltrackers.
+            // var tickmarks = tw$(".tickmark-track .tickmark:not(.tickmark-current)", myEditor.getRootElement());
             expect(tickmarks.length).toEql(selections.length);
 
             // Verify that editor UI doesn't have extra ranges left highlighted from earlier
@@ -395,11 +397,11 @@ define(function (require, exports, module) {
                 enterSearchText("foo");
                 expectHighlightedMatches(fooExpectedMatches);
 
-                var marks = testWindow.brackets.test.ScrollTrackMarkers._getTickmarks();
+                var marks = testWindow.brackets.test.ScrollTrackMarkers._getTickmarks(myEditor);
                 expect(marks.length).toEql(fooExpectedMatches.length);
 
                 marks.forEach(function (mark, index) {
-                    expect(mark.line).toEql(fooExpectedMatches[index].start.line);
+                    expect(mark.start.line).toEql(fooExpectedMatches[index].start.line);
                 });
             });
 

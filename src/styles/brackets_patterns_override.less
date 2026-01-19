@@ -703,10 +703,101 @@ a:focus {
     position: absolute;
     right: 0;
     margin-top:-2px;
-    color: #2ea56c !important;
+    color: @css-codehint-icon  !important;
     .dark& {
-        color: #146a41 !important;
+        color: @dark-css-codehint-icon !important;
     }
+}
+
+.emmet-css-code-hint {
+  visibility: hidden;
+}
+
+.codehint-menu .dropdown-menu li .highlight .emmet-css-code-hint {
+  visibility: visible;
+  position: absolute;
+  right: 0;
+  margin-top: -2px;
+  font-size: 0.85em !important;
+  font-weight: @font-weight-semibold;
+  letter-spacing: 0.3px;
+  color: @css-codehint-icon !important;
+  .dark& {
+    color: @dark-css-codehint-icon !important;
+  }
+}
+
+.emmet-html-code-hint {
+    visibility: hidden;
+}
+
+.codehint-menu .dropdown-menu li a.highlight .emmet-html-code-hint {
+    visibility: visible;
+    position: absolute;
+    right: 1rem;
+    font-size: 0.85em !important;
+    font-weight: @font-weight-semibold;
+    letter-spacing: 0.3px;
+    color: @css-codehint-icon !important;
+    .dark& {
+        color: @dark-css-codehint-icon !important;
+    }
+}
+
+.emmet-text-content {
+    display: inline-block;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: top;
+    line-height: inherit;
+}
+
+.custom-snippet-code-hint {
+    visibility: hidden;
+}
+
+.codehint-menu .dropdown-menu li .highlight .custom-snippet-code-hint {
+    visibility: visible;
+    position: absolute;
+    right: 0;
+    margin-top: -2px;
+    font-size: 0.85em !important;
+    font-weight: @font-weight-semibold;
+    letter-spacing: 0.3px;
+    color: @css-codehint-icon !important;
+    .dark& {
+      color: @dark-css-codehint-icon !important;
+    }
+}
+
+.custom-snippets-hint {
+    min-width: 200px !important;
+    max-width: 350px !important;
+    display: inline-block !important;
+}
+
+.snippet-description {
+    display: none;
+    color: grey;
+    word-wrap: break-word;
+    white-space: normal;
+    max-height: 2.2em;
+    box-sizing: border-box;
+    text-overflow: ellipsis;
+    line-height: 1em;
+    padding-top: 2px !important;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+
+    .dark & {
+        color: #ccc;
+    }
+}
+
+.highlight .snippet-description {
+    display: block;
 }
 
 #codehint-desc {
@@ -976,13 +1067,12 @@ a:focus {
 }
 
 .modal-header {
-    background: @bc-panel-bg-promoted;;
+    background: @bc-titlebar-modern-gradient;
     border-radius: 4px 4px 0 0;
     border-bottom: 1px solid @bc-panel-separator;
     box-shadow: inset 0 1px 0 @bc-highlight;
 
     .dark & {
-        background: @dark-bc-panel-bg-promoted;;
         border-bottom: 1px solid @dark-bc-panel-separator;
         box-shadow: inset 0 1px 0 @dark-bc-highlight;
     }
@@ -2252,6 +2342,18 @@ dt,
     }
 }
 
+.alert.alert-success {
+    text-shadow: none;
+    background-color: @successBackground;
+    border: none;
+
+    .dark & {
+        background: @dark-bc-success-bg;
+        border-radius: 2px;
+        color: @dark-bc-text;
+    }
+}
+
 .alert h4 {
     // Specified for the h4 to prevent conflicts of changing @headingsColor
     color: @bc-warning-bg;
@@ -2410,5 +2512,144 @@ code {
         input[type='checkbox'] {
              margin-top: 8px;
         }
-     }
- }
+    }
+}
+
+// image folder selection dialog
+.image-folder-dialog {
+    #folder-path-input {
+        width: 100%;
+        height: 30px;
+        padding: 5px;
+        box-sizing: border-box;
+        margin-bottom: 10px;
+    }
+
+    #folder-suggestions {
+        max-height: 150px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        outline: 1px solid #f5f5f5;
+        border-radius: 3px;
+        background-color: #f5f5f5;
+
+        .dark & {
+            background-color: #1E1E1E;
+            outline: 1px solid #1E1E1E;
+        }
+
+        &:empty {
+            display: none;
+        }
+
+        .folder-suggestions-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .folder-suggestion-item {
+            padding: 6px 10px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 0.875rem;
+            letter-spacing: 0.4px;
+            word-spacing: 0.75px;
+            color: #555;
+            background-color: #f1f1f1;
+            border-right: 1px solid rgba(0, 0, 0, 0.05);
+            position: relative;
+            user-select: none;
+
+            .dark & {
+                color: #aaa;
+                background-color: #292929;
+                border-right: 1px solid rgba(255, 255, 255, 0.05);
+            }
+
+            &:hover {
+                background-color: #e0e0e0;
+
+                .dark & {
+                    background-color: #3b3a3a;
+                }
+            }
+
+            &.selected {
+                background-color: #fff;
+                color: #333;
+
+                .dark & {
+                    background-color: #1D1F21;
+                    color: #dedede;
+                }
+
+                &::after {
+                    content: "";
+                    position: absolute;
+                    top: 0;
+                    bottom: 0;
+                    left: 0;
+                    width: 0.15rem;
+                    background-color: #0078D7;
+
+                    .dark & {
+                        background-color: #75BEFF;
+                    }
+                }
+
+                &:hover {
+                    background-color: #fff;
+
+                    .dark & {
+                        background-color: #1D1F21;
+                    }
+                }
+            }
+        }
+
+        .folder-match-highlight {
+            color: #288edf;
+
+            .dark & {
+                color: #3da3ff;
+            }
+        }
+    }
+
+    .folder-help-text {
+        margin-top: 10px;
+        margin-bottom: 0;
+        font-size: 11px;
+        color: @bc-text-quiet;
+        user-select: none;
+
+        .dark & {
+            color: @dark-bc-text-quiet;
+        }
+    }
+
+    .remember-folder-container {
+        display: flex;
+        justify-content: right;
+    }
+
+    .remember-folder-container label {
+        font-size: 12px;
+        letter-spacing: 0.3px;
+        color: @bc-text-quiet;
+
+        .dark & {
+            color: @dark-bc-text-quiet;
+        }
+    }
+
+    .remember-folder-container input {
+        margin-top: 2px;
+    }
+}
+
+.striked {
+  text-decoration: line-through;
+}

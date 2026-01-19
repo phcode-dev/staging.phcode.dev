@@ -23,6 +23,7 @@ define(function (require, exports, module) {
 
     require("spec/Phoenix-platform-test");
     require("spec/Tauri-platform-test");
+    require("spec/trust-ring-test");
     require("spec/utframework-suite-test");
     require("spec/Async-test");
     require("spec/CommandManager-test");
@@ -119,14 +120,16 @@ define(function (require, exports, module) {
     require("spec/Generic-integ-test");
     require("spec/spacing-auto-detect-integ-test");
     require("spec/LocalizationUtils-test");
+    require("spec/ScrollTrackHandler-integ-test");
     // Integrated extension tests
-    require("spec/Extn-InAppNotifications-integ-test");
     require("spec/Extn-RemoteFileAdapter-integ-test");
     require("spec/Extn-NavigationAndHistory-integ-test");
     require("spec/Extn-RecentProjects-integ-test");
     require("spec/Extn-JSHint-integ-test");
     require("spec/Extn-ESLint-integ-test");
     require("spec/Extn-CSSColorPreview-integ-test");
+    require("spec/Extn-CollapseFolders-integ-test");
+    require("spec/Extn-Tabbar-integ-test");
     // extension integration tests
     require("spec/Extn-CSSCodeHints-integ-test");
     require("spec/Extn-HTMLCodeHints-Lint-integ-test");
@@ -134,6 +137,8 @@ define(function (require, exports, module) {
     require("spec/Extn-Git-integ-test");
     // Node Tests
     require("spec/NodeConnection-test");
+    // pro test suite optional components
+    require("./pro-test-suite");
     // todo TEST_MODERN
     // require("spec/LanguageTools-test"); LSP tests. disabled for now
     // require("spec/Menu-native-integ-test"); evaluate after we have native menus in os installed builds
