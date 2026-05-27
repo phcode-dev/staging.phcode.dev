@@ -1,0 +1,119 @@
+/*
+ * GNU AGPL-3.0 License
+ *
+ * Copyright (c) 2021 - present core.ai . All rights reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License
+ * for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see https://opensource.org/licenses/AGPL-3.0.
+ *
+ */
+
+/* Sidebar tab bar — switches between tab panes within #sidebar */
+
+#navTabBar {
+    display: none;
+    align-items: stretch;
+    gap: 2px;
+    margin: 0.5rem 0.5rem 0.4rem;
+    padding: 3px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 7px;
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.25);
+    user-select: none;
+
+    &.has-tabs {
+        display: flex;
+    }
+}
+
+.sidebar-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 0;
+    gap: 0.4rem;
+    // Slightly more vertical padding so the larger label doesn't feel
+    // boxed in; horizontal stays the same.
+    padding: 0.3rem 0.75rem;
+    cursor: pointer;
+    color: @project-panel-text-2;
+    // Bumped from 0.8rem (~11px) to 0.85rem (~12px). 0.8rem read as
+    // chrome-too-small against the panel's 14px content; 12px aligns
+    // with the secondary-tier scale used elsewhere in the AI panel
+    // and matches modern editor tab-bar conventions.
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 5px;
+    transition: color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+
+    i {
+        font-size: 0.82rem;
+        opacity: 0.85;
+    }
+
+    &:hover:not(.active) {
+        color: @project-panel-text-1;
+        background-color: rgba(255, 255, 255, 0.04);
+    }
+
+    &.active {
+        color: @project-panel-text-1;
+        background-color: rgba(255, 255, 255, 0.09);
+        box-shadow:
+            0 1px 0 rgba(255, 255, 255, 0.05) inset,
+            0 1px 2px rgba(0, 0, 0, 0.2);
+
+        i {
+            opacity: 1;
+        }
+    }
+}
+
+/* Hide sidebar children not belonging to the active tab */
+.sidebar-tab-hidden {
+    display: none !important;
+}
+
+/* AI tab placeholder content */
+.ai-tab-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    .box-flex(1);
+    flex: 1;
+    color: @project-panel-text-2;
+    padding: 2rem;
+    text-align: center;
+    min-height: 0;
+    height: 100%;
+
+    .ai-tab-icon {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        opacity: 0.6;
+    }
+
+    .ai-tab-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: @project-panel-text-1;
+        margin-bottom: 0.5rem;
+    }
+
+    .ai-tab-message {
+        font-size: 0.8rem;
+        line-height: 1.4;
+        opacity: 0.7;
+    }
+}

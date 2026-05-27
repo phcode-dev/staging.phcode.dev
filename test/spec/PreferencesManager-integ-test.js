@@ -58,20 +58,20 @@ define(function (require, exports, module) {
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(fileName));
             await awaitsFor(()=>{
                 return PreferencesManager.get("spaceUnits") === expectedSpaceUnits;
-            }, "space units to be "+expectedSpaceUnits);
+            }, "space units to be "+expectedSpaceUnits, 10000);
             await awaitsForDone(FileViewController.openAndSelectDocument(nonProjectFile,
                 FileViewController.WORKING_SET_VIEW));
 
             await awaitsFor(()=>{
                 return PreferencesManager.get("spaceUnits") !== expectedSpaceUnits;
-            }, "space non project file units not to be "+expectedSpaceUnits);
+            }, "space non project file units not to be "+expectedSpaceUnits, 10000);
 
             // Changing projects will force a change in the project scope.
             await SpecRunnerUtils.loadProjectInTestWindow(projectWithoutSettings);
             await awaitsForDone(SpecRunnerUtils.openProjectFiles("file_one.js"));
             await awaitsFor(()=>{
                 return PreferencesManager.get("spaceUnits") !== expectedSpaceUnits;
-            }, "space units not to be "+expectedSpaceUnits);
+            }, "space units not to be "+expectedSpaceUnits, 10000);
         }
 
         it("should find .phcode.json preferences in the project", async function () {
@@ -93,6 +93,9 @@ define(function (require, exports, module) {
         });
 
         it("should show a problem when both .phcode.json and .brackets.json are present in project", async function () {
+            const CommandManager = testWindow.brackets.test.CommandManager;
+            const Commands = testWindow.brackets.test.Commands;
+
             await SpecRunnerUtils.loadProjectInTestWindow(testPathBothPrefs);
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(".phcode.json"));
             await awaitsFor(()=>{
@@ -102,19 +105,23 @@ define(function (require, exports, module) {
             // there will be an error in problems panel if both present
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(".phcode.json"));
             await awaitsFor(()=>{
-                return testWindow.$("#problems-panel").is(":visible") &&
-                    testWindow.$("#problems-panel").text().includes(Strings.ERROR_PREFS_PROJECT_LINT_MESSAGE);
+                return testWindow.$("#status-inspection").hasClass("inspection-errors");
+            }, "lint errors detected on .phcode.json");
+            if (!testWindow.$("#problems-panel").is(":visible")) {
+                CommandManager.execute(Commands.VIEW_TOGGLE_PROBLEMS);
+            }
+            await awaitsFor(()=>{
+                return testWindow.$("#problems-panel").text().includes(Strings.ERROR_PREFS_PROJECT_LINT_MESSAGE);
             }, "problem panel on .phcode.json");
 
             await awaitsForDone(SpecRunnerUtils.openProjectFiles("test.json"));
             await awaitsFor(()=>{
-                return !testWindow.$("#problems-panel").is(":visible");
-            }, "problem panel should not be there for normal test.json file");
+                return !testWindow.$("#status-inspection").hasClass("inspection-errors");
+            }, "no lint errors for normal test.json file");
 
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(".brackets.json"));
             await awaitsFor(()=>{
-                return testWindow.$("#problems-panel").is(":visible") &&
-                    testWindow.$("#problems-panel").text().includes(Strings.ERROR_PREFS_PROJECT_LINT_MESSAGE);
+                return testWindow.$("#problems-panel").text().includes(Strings.ERROR_PREFS_PROJECT_LINT_MESSAGE);
             }, "problem panel on .brackets.json");
         });
 

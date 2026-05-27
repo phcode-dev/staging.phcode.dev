@@ -46,8 +46,15 @@
 @import "Extn-CSSColorPreview.less";
 @import "Extn-CustomSnippets.less";
 @import "Extn-CollapseFolders.less";
+@import "Extn-SidebarTabs.less";
+@import "Extn-BottomPanelTabs.less";
+@import "Extn-AIChatPanel.less";
+@import "CentralControlBar.less";
+@import "Extn-PhoenixTour.less";
+@import "Extn-Terminal.less";
 @import "UserProfile.less";
 @import "phoenix-pro.less";
+@import "VideoPlayer.less";
 
 /* Overall layout */
 
@@ -261,9 +268,11 @@ a, img {
 
     .content {
         padding: 0;
-        left: @sidebar-width;  // changed dynamically via Resizer
+        left: (@sidebar-width + 30px);  // changed dynamically via Resizer + CentralControlBar
         right: @main-toolbar-width;
         z-index: @z-index-brackets-main-content;
+        border-left: 2px solid rgba(255, 255, 255, 0.10);
+        border-right: 2px solid rgba(255, 255, 255, 0.10);
     }
 
     .force-right-zero {
@@ -643,6 +652,14 @@ a, img {
 
 #status-overwrite.flash {
     animation: brightenFade 2s ease-in-out;
+}
+
+#status-panel-toggle {
+    cursor: pointer;
+}
+
+#status-panel-toggle.flash {
+    animation: brightenFade 800ms ease-in-out;
 }
 
 @keyframes brightenFade {
@@ -1177,10 +1194,22 @@ a, img {
     }
 }
 
+#app-drawer-button {
+    background-image: url("images/app-drawer.svg");
+    background-position: center;
+    background-size: 16px;
+}
+
+#terminal-toolbar-button {
+    background-image: url("images/toolbar-terminal.svg");
+    background-position: center;
+    background-size: 16px;
+}
+
 /* Project panel */
 
 #working-set-list-container {
-    background: @bc-sidebar-bg;
+    background: @bc-working-set-bg;
     display: block;
 
     > div:last-child ul {
@@ -1196,19 +1225,19 @@ a, img {
     position: relative;
     height: 19px;
     padding: 10px 0 9px 12px;
-    background: @bc-sidebar-bg;
+    background: @bc-working-set-bg;
     color: @project-panel-text-2;
     text-shadow: none;
     overflow: hidden;
 
     > span {
-        background: @bc-sidebar-bg;
+        background: @bc-working-set-bg;
         position: relative;
         z-index: 9;
     }
 
     > div {
-        background-color: @dark-bc-sidebar-bg;
+        background-color: @bc-working-set-bg;
         opacity: 1;
     }
 }
@@ -1218,6 +1247,7 @@ a, img {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 #mainNavBarLeft {
@@ -1273,44 +1303,41 @@ a, img {
     z-index: 1;
 }
 
-.nav-back-btn {
-    top: 7px;
-    padding: 4px 6px;
-    .sprite-icon(0, 0, 13px, 13px, "images/sprites.svg#leftArrow");
-    background-position: center;
-    background-size: cover;
-    opacity: 0.8;
-    z-index: 1;
-}
-
-.nav-forward-btn {
-    top: 7px;
-    padding: 4px 6px;
-    .sprite-icon(0, 0, 13px, 13px, "images/sprites.svg#rightArrow");
-    background-position: center;
-    background-size: cover;
-    opacity: 0.8;
-    z-index: 1;
-}
-
-.nav-back-btn-disabled {
-    top: 7px;
-    padding: 4px 6px;
-    .sprite-icon(0, 0, 13px, 13px, "images/sprites.svg#leftArrowDisabled");
-    background-position: center;
-    background-size: cover;
-    opacity: 0.8;
-    z-index: 1;
-}
-
+/* Back / forward nav buttons use FontAwesome arrows so they match the
+   browser's back/forward affordance and stay visually consistent with
+   the other FA-based sidebar and toolbar buttons. NavigationProvider
+   still toggles .nav-back-btn / .nav-back-btn-disabled (and the forward
+   pair) to signal the enabled state — the rules below read as a single
+   icon button with an enabled/disabled fork. */
+.nav-back-btn,
+.nav-forward-btn,
+.nav-back-btn-disabled,
 .nav-forward-btn-disabled {
     top: 7px;
     padding: 4px 6px;
-    .sprite-icon(0, 0, 13px, 13px, "images/sprites.svg#rightArrowDisabled");
-    background-position: center;
-    background-size: cover;
-    opacity: 0.8;
+    width: 13px;
+    height: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    line-height: 1;
     z-index: 1;
+
+    i {
+        pointer-events: none;
+    }
+}
+
+.nav-back-btn,
+.nav-forward-btn {
+    opacity: 0.8;
+}
+
+.nav-back-btn-disabled,
+.nav-forward-btn-disabled {
+    opacity: 0.35;
+    pointer-events: none;
 }
 
 .splitview-icon-none {
@@ -1360,6 +1387,15 @@ a, img {
     cursor: col-resize;
 }
 
+/* Resizer.js visibility-preserving hide: elements with .layout-preserve-hide
+   get this class toggled instead of `display: none`, so their descendants
+   keep their layout objects (and scrollTop / content-visibility caches)
+   across collapse/expand. */
+.layout-preserve-hide.layout-hidden {
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
 .working-set-header-title{
     font-size: 15px;
 }
@@ -1367,15 +1403,16 @@ a, img {
 #project-files-header {
     display: flex;
     align-items: center;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    border-top: none;
     padding: 6px 0 6px 12px;
     font-size: 15px;
     color: @project-panel-text-2;
+    background-color: @bc-project-files-bg;
     overflow: hidden;
     gap: .5em;
 
     .btn-alt-quiet {
-        background-color: #47484b;
+        background-color: transparent;
 
         // relative positioning plus z-index make sure that the splitview button flows under the left aligned buttons in the project pane when there are no working set files
         position: relative;
@@ -1426,7 +1463,7 @@ a, img {
         height: 16px;
         line-height: 15px;
         margin-left: 18px;
-        padding: 3px 0 3px 0;
+        padding: 4px 0 3px 0;
 
         cursor: default;
 
@@ -1448,8 +1485,8 @@ a, img {
 
 .sidebar-selection, .filetree-selection {
     background: @bc-sidebar-selection;
-    border-top: 1px solid @bc-shadow-small;
-    border-bottom: 1px solid @bc-highlight;
+    border: none;
+    box-shadow: none;
     box-sizing: border-box;
     height: 23px;
     width: 100%;
@@ -1457,9 +1494,9 @@ a, img {
 }
 
 .sidebar-selection-extension, .filetree-selection-extension {
-    background: @bc-sidebar-selection;
-    border-top: 1px solid @bc-shadow-small;
-    border-bottom: 1px solid @bc-highlight;
+    background: transparent;
+    border-top: none;
+    border-bottom: none;
     box-sizing: border-box;
     height: 23px;
     width: 9px; /* quiet scrollbar width */
@@ -1493,6 +1530,7 @@ a, img {
 
 #project-files-container {
     .box-flex(1);
+    background-color: @bc-project-files-bg;
 
     div > ul {
         padding-bottom: 24px;
@@ -1503,20 +1541,20 @@ a, img {
 .scroller-shadow {
     background-size: 100%;
     background-repeat: no-repeat;
-    height: 5px;
+    height: 8px;
     position: fixed;
     z-index: @z-index-brackets-scroller-shadow;
     pointer-events: none; // serves as a "click through", so clicks go to the file tree behind (see #12684)
 
     &.top {
-        #gradient > .vertical(rgba(0,0,0,0.1), rgba(0,0,0,0));
-        background-position: 0 -5px;
+        #gradient > .vertical(rgba(0,0,0,0.18), rgba(0,0,0,0));
+        background-position: 0 -8px;
         background-color: transparent; /* override background-color: @endColor from #gradient.vertical */
     }
 
     &.bottom {
-        #gradient > .vertical(rgba(0,0,0,0), rgba(0,0,0,0.1));
-        background-position: 0 5px;
+        #gradient > .vertical(rgba(0,0,0,0), rgba(0,0,0,0.12));
+        background-position: 0 8px;
         background-color: transparent; /* override background-color: @endColor from #gradient.vertical */
     }
 }
@@ -1897,11 +1935,14 @@ a, img {
 
 /* Find in Files results panel - temporary UI, to be replaced with a richer search feature later */
 
+.search-results .toolbar {
+    padding: 5px 8px;
+}
 .search-results .title {
     .sane-box-model;
-    padding-right: 20px;
+    margin-left: 4px;
     width: 100%;
-    line-height: 25px;
+    line-height: 26px;
 
     .flex-box;
     .contracting-col {
@@ -1964,6 +2005,31 @@ a, img {
     .disabled:active {
         background-color: transparent;
         opacity: 0.3;
+    }
+}
+
+.search-results.search-no-results {
+    .table-container {
+        width: 100% !important;
+    }
+    .search-editor-preview {
+        display: none !important;
+    }
+}
+
+.search-no-results-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #888;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    word-spacing: 1px;
+    user-select: none;
+
+    .dark & {
+        color: #999;
     }
 }
 
@@ -2363,6 +2429,7 @@ a, img {
 
     .search-input-container {
         display: inline-flex;
+        vertical-align: top;
     }
     .filter-container{
         margin-left: -11px;
@@ -2679,6 +2746,96 @@ textarea.exclusions-editor {
         background: @dark-bc-input-bg;
         color: @dark-bc-text-quiet;
     }
+}
+
+// Spotlight-style floating Quick Open picker used while in design mode, where
+// the standard ModalBar has no editor space to mount into.
+// No backdrop dim/blur — file switching is frequent and UI-wide visual
+// changes feel jarring. The overlay only exists to host the centered bar
+// and catch outside-clicks for dismiss.
+.quick-open-floating-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: @z-index-brackets-context-menu-base + 50;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 12vh;
+    background: transparent;
+    pointer-events: none;  // passthrough; the bar re-enables pointer events below
+}
+.quick-open-floating-bar {
+    width: 640px;
+    max-width: 90vw;
+    padding: 0;
+    background-color: @bc-panel-bg;
+    border: 1px solid @bc-panel-border;
+    border-radius: 10px 10px 0 0;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    pointer-events: auto;  // re-enable inside the bar (overlay disables it for passthrough)
+    .dark & {
+        background-color: @dark-bc-panel-bg;
+        border-color: @dark-bc-panel-border;
+    }
+
+    // Input line
+    > div {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 4px 14px;
+    }
+    input[type="text"] {
+        flex: 1 1 auto;
+        width: auto !important;
+        min-width: 0;
+        box-sizing: border-box;
+        height: 48px !important;
+        font-size: 18px;
+        line-height: 1.4;
+        padding: 10px 4px !important;
+        margin: 0 !important;
+        border: 0 !important;
+        outline: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: @bc-text;
+        .dark & {
+            color: @dark-bc-text;
+        }
+        &::placeholder {
+            color: @bc-text-quiet;
+            .dark & { color: @dark-bc-text-quiet; }
+        }
+    }
+    .indexing-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: 0 0 auto;
+        order: -1;  // spinner before input
+    }
+    .find-dialog-label {
+        flex: 0 0 auto;
+        color: @bc-text-quiet;
+        font-size: 12px;
+        .dark & { color: @dark-bc-text-quiet; }
+    }
+}
+// While the floating Quick Open is up, anchor the results dropdown to the
+// floating bar (it's the one styled to contain it). The dropdown is appended
+// to <body> by QuickSearchField; constrain its max-height so it never
+// overflows the viewport, and lift its z-index above the overlay so the
+// overlay's backdrop-filter doesn't blur the dropdown too.
+body:has(.quick-open-floating-overlay) .quick-search-container {
+    z-index: @z-index-brackets-context-menu-base + 51;
+    max-height: 60vh;
+    overflow-y: auto;
+    border-radius: 0 0 10px 10px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
 }
 
 .quick-search-container {
@@ -3030,6 +3187,12 @@ textarea.exclusions-editor {
 
 #problems-panel {
     .user-select(text);  // allow selecting error messages for easy web searching
+    .toolbar {
+        padding: 9px 8px;
+    }
+    .title {
+        margin-left: 4px;
+    }
     .line {
         text-align: right;  // make line number line up with editor line numbers
     }
@@ -3189,10 +3352,10 @@ label input {
     .line-height-slider {
         padding-top: 5px;
     }
-    .fontLineHeightSlider {
+    .fontLineHeightSlider, .scrollSensitivitySlider {
         width: 220px;
     }
-    .fontLineHeightValue {
+    .fontLineHeightValue, .scrollSensitivityValue {
         margin-left: 3px;
         padding-top: 5px;
     }
@@ -3332,6 +3495,69 @@ label input {
     a:hover {
         color: @bc-text-alt;
     }
+}
+
+/* Inline toast: positioned inside a relative/absolute container */
+.inline-toast {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.75);
+    color: #e0e0e0;
+}
+
+.inline-toast.visible {
+    opacity: 1;
+}
+
+/* HUD overlay: centered macOS-style notification (zoom, volume, etc.) */
+.hud-overlay {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 140px;
+    height: 120px;
+    border-radius: 16px;
+    background: rgba(30, 30, 30, 0.85);
+    color: #e0e0e0;
+    z-index: 10000;
+    pointer-events: none;
+    user-select: none;
+    i {
+        font-size: 40px;
+        margin-bottom: 8px;
+    }
+    .hud-label {
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+}
+
+.inline-toast kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    margin: 0 2px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
 }
 
 .github-stars-button {

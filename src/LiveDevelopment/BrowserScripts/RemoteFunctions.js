@@ -24,34 +24,32 @@ function RemoteFunctions(config = {}) {
     const MessageBroker = window._Brackets_MessageBroker; // to be used by plugins.
 
     const SHARED_STATE = {
-        __description: "Use this to keep shared state for Live Preview Edit instead of window.*"
+        __description: "Use this to keep shared state for Live Preview Edit instead of window.*",
+        _suppressDOMEditDismissal: false,
+        _suppressDOMEditDismissalTimeout: null
     };
 
     let _hoverHighlight;
     let _clickHighlight;
     let _cssSelectorHighlight; // temporary highlight for CSS selector matches in edit mode
     let _hoverLockTimer = null;
-    let _cssSelectorHighlightTimer = null; // timer for clearing temporary CSS selector highlights
+    let _cssSelectorHighlightTimer = null;
+    let _lastHoverTarget = null; // tracks the element currently under the mouse (for same-element skip)
+    let _pendingHoverRAF = null; // pending requestAnimationFrame ID for hover updates
 
     // this will store the element that was clicked previously (before the new click)
     // we need this so that we can remove click styling from the previous element when a new element is clicked
     let previouslySelectedElement = null;
+    let _selectedFromEditor = false;
     // Expose the currently selected element globally for external access
     window.__current_ph_lp_selected = null;
 
-    var req, timeout;
-    function animateHighlight(time) {
-        if(req) {
-            window.cancelAnimationFrame(req);
-            window.clearTimeout(timeout);
-        }
-        req = window.requestAnimationFrame(redrawHighlights);
-
-        timeout = setTimeout(function () {
-            window.cancelAnimationFrame(req);
-            req = null;
-        }, time * 1000);
-    }
+    const COLORS = {
+        highlightPadding: "rgba(147, 196, 125, 0.55)",
+        highlightMargin: "rgba(246, 178, 107, 0.66)",
+        outlineEditable: "#4285F4",
+        outlineNonEditable: "#3C3F41"
+    };
 
     // the following fucntions can be in the handler and live preview will call those functions when the below
     // events happen
@@ -59,6 +57,7 @@ function RemoteFunctions(config = {}) {
         "dismiss", // when handler gets this event, it should dismiss all ui it renders in the live preview
         "createToolBox",
         "createInfoBox",
+        "showHoverBox",
         "createMoreOptionsDropdown",
         // render an icon or html when the selected element toolbox appears in edit mode.
         "renderToolBoxItem",
@@ -72,6 +71,7 @@ function RemoteFunctions(config = {}) {
         "renderDropdownItems",
         // called when an item is selected from the more options dropdown
         "handleDropdownClick",
+        "updateContent", // in-place content refresh for control box etc. after drag
         "reRegisterEventHandlers",
         "handleClick", // handle click on an icon in the tool box.
         // when escape key is presses in the editor, we may need to dismiss the live edit boxes.
@@ -113,6 +113,10 @@ function RemoteFunctions(config = {}) {
      * check if an element is inspectable.
      * inspectable elements are those which doesn't have GLOBALS.DATA_BRACKETS_ID_ATTR ('data-brackets-id'),
      * this normally happens when content is DOM content is inserted by some scripting language
+     *
+     * Elements opted out via `phcode-no-lp-edit` (cascades to descendants) or
+     * `phcode-no-lp-edit-this` (this element only) are also non-inspectable so
+     * every downstream tool inherits the opt-out automatically.
      */
     function isElementInspectable(element, onlyHighlight = false) {
         if(config.mode !== 'edit' && !onlyHighlight) {
@@ -124,7 +128,9 @@ function RemoteFunctions(config = {}) {
             element.tagName.toLowerCase() !== "html" && // shouldn't be the HTML tag
             // this attribute is used by phoenix internal elements
             !element.closest(`[${GLOBALS.PHCODE_INTERNAL_ATTR}]`) &&
-            !_isInsideHeadTag(element)) { // shouldn't be inside the head tag like meta tags and all
+            !_isInsideHeadTag(element) && // shouldn't be inside the head tag like meta tags and all
+            !element.closest('.phcode-no-lp-edit') &&
+            !(element.classList && element.classList.contains('phcode-no-lp-edit-this'))) {
             return true;
         }
         return false;
@@ -179,7 +185,9 @@ function RemoteFunctions(config = {}) {
         handleElementClick: handleElementClick,
         cleanupPreviousElementState: cleanupPreviousElementState,
         disableHoverListeners: disableHoverListeners,
-        enableHoverListeners: enableHoverListeners
+        enableHoverListeners: enableHoverListeners,
+        redrawHighlights: redrawHighlights,
+        redrawEverything: redrawEverything
     };
 
     /**
@@ -263,267 +271,213 @@ function RemoteFunctions(config = {}) {
         return element.offsetTop + (element.offsetParent ? getDocumentOffsetTop(element.offsetParent) : 0);
     }
 
-    function Highlight(color, trigger) {
-        this.color = color;
+    // Shadow DOM host for highlight overlays — isolates our UI from user page CSS.
+    let _highlightShadowHost = null;
+    let _highlightShadowRoot = null;
+
+    const HIGHLIGHT_CSS = `:host {
+        all: initial !important;
+    }
+
+    .overlay-container {
+        position: absolute !important;
+        z-index: 2147483645 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        pointer-events: none !important;
+        box-sizing: border-box !important;
+    }
+
+    .rect {
+        position: absolute !important;
+    }
+
+    .overlay-container.hidden {
+        display: none !important;
+    }
+
+    .outline {
+        position: absolute !important;
+        box-sizing: border-box !important;
+        pointer-events: none !important;
+    }`;
+
+    function _ensureHighlightShadowRoot() {
+        if (_highlightShadowRoot) {
+            return _highlightShadowRoot;
+        }
+        _highlightShadowHost = window.document.createElement("div");
+        _highlightShadowHost.className = GLOBALS.HIGHLIGHT_CLASSNAME;
+        _highlightShadowHost.setAttribute(GLOBALS.PHCODE_INTERNAL_ATTR, "true");
+        _highlightShadowRoot = _highlightShadowHost.attachShadow({ mode: "open" });
+        _highlightShadowRoot.innerHTML = `<style>${HIGHLIGHT_CSS}</style>`;
+        window.document.body.appendChild(_highlightShadowHost);
+        return _highlightShadowRoot;
+    }
+
+    // Overlay pool — overlays are created once and reused across highlights.
+    // When released, they stay in the shadow DOM (hidden) ready for instant reuse.
+    // This eliminates all DOM creation/destruction from the highlight hot paths.
+    const _overlayPool = [];
+
+    function _createOverlayStructure() {
+        const div = window.document.createElement("div");
+        div.className = "overlay-container hidden";
+
+        function createRect() {
+            const r = window.document.createElement("div");
+            r.className = "rect";
+            return r;
+        }
+
+        const padTop = createRect(), padBottom = createRect(),
+            padLeft = createRect(), padRight = createRect();
+        const marTop = createRect(), marBottom = createRect(),
+            marLeft = createRect(), marRight = createRect();
+        const outline = window.document.createElement("div");
+        outline.className = "outline";
+
+        div.appendChild(padTop);
+        div.appendChild(padBottom);
+        div.appendChild(padLeft);
+        div.appendChild(padRight);
+        div.appendChild(marTop);
+        div.appendChild(marBottom);
+        div.appendChild(marLeft);
+        div.appendChild(marRight);
+        div.appendChild(outline);
+
+        // Cache child references for O(1) access during updates
+        div._refs = {
+            padTop, padBottom, padLeft, padRight,
+            marTop, marBottom, marLeft, marRight,
+            outline
+        };
+
+        _ensureHighlightShadowRoot().appendChild(div);
+        return div;
+    }
+
+    function _getOverlay() {
+        return _overlayPool.length > 0 ? _overlayPool.pop() : _createOverlayStructure();
+    }
+
+    function _releaseOverlay(overlay) {
+        overlay.classList.add('hidden');
+        overlay.trackingElement = null;
+        _overlayPool.push(overlay);
+    }
+
+    // Update an existing overlay's position, dimensions, and colors to match the target element.
+    // No DOM elements are created or destroyed — only style properties are updated.
+    function _updateOverlay(overlay, element) {
+        const bounds = element.getBoundingClientRect();
+        if (bounds.width === 0 && bounds.height === 0) {
+            overlay.classList.add('hidden');
+            return;
+        }
+
+        const cs = window.getComputedStyle(element);
+
+        // Parse box model values (getComputedStyle always resolves to px)
+        const bt = parseFloat(cs.borderTopWidth) || 0,
+            br = parseFloat(cs.borderRightWidth) || 0,
+            bb = parseFloat(cs.borderBottomWidth) || 0,
+            bl = parseFloat(cs.borderLeftWidth) || 0;
+        const pt = parseFloat(cs.paddingTop) || 0,
+            pr = parseFloat(cs.paddingRight) || 0,
+            pb = parseFloat(cs.paddingBottom) || 0,
+            pl = parseFloat(cs.paddingLeft) || 0;
+        const mt = parseFloat(cs.marginTop) || 0,
+            mr = parseFloat(cs.marginRight) || 0,
+            mb = parseFloat(cs.marginBottom) || 0,
+            ml = parseFloat(cs.marginLeft) || 0;
+
+        // Compute the 4 absolute boxes exactly like dev tools:
+        // getBoundingClientRect() always returns the border box regardless of box-sizing.
+        const scroll = LivePreviewView.screenOffset(element);
+        const borderBox = {
+            left: scroll.left,
+            top: scroll.top,
+            width: bounds.width,
+            height: bounds.height
+        };
+        const paddingBox = {
+            left: borderBox.left + bl,
+            top: borderBox.top + bt,
+            width: borderBox.width - bl - br,
+            height: borderBox.height - bt - bb
+        };
+        const contentBox = {
+            left: paddingBox.left + pl,
+            top: paddingBox.top + pt,
+            width: paddingBox.width - pl - pr,
+            height: paddingBox.height - pt - pb
+        };
+        const marginBox = {
+            left: borderBox.left - ml,
+            top: borderBox.top - mt,
+            width: borderBox.width + ml + mr,
+            height: borderBox.height + mt + mb
+        };
+
+        // Update container position
+        overlay.trackingElement = element;
+        overlay.style.left = marginBox.left + "px";
+        overlay.style.top = marginBox.top + "px";
+        overlay.style.width = marginBox.width + "px";
+        overlay.style.height = marginBox.height + "px";
+        overlay.classList.remove('hidden');
+
+        const refs = overlay._refs;
+        const mLeft = marginBox.left;
+
+        // Update a rect's position, size, and color in place
+        function setRect(rect, left, top, width, height, color) {
+            const s = rect.style;
+            s.left = (left - mLeft) + "px";
+            s.top = (top - marginBox.top) + "px";
+            s.width = Math.max(0, width) + "px";
+            s.height = Math.max(0, height) + "px";
+            s.backgroundColor = color;
+        }
+
+        // Padding region
+        const padColor = COLORS.highlightPadding;
+        setRect(refs.padTop, paddingBox.left, paddingBox.top, paddingBox.width, pt, padColor);
+        setRect(refs.padBottom, paddingBox.left, contentBox.top + contentBox.height, paddingBox.width, pb, padColor);
+        setRect(refs.padLeft, paddingBox.left, contentBox.top, pl, contentBox.height, padColor);
+        setRect(refs.padRight, contentBox.left + contentBox.width, contentBox.top, pr, contentBox.height, padColor);
+
+        // Margin region
+        const margColor = COLORS.highlightMargin;
+        setRect(refs.marTop, marginBox.left, marginBox.top, marginBox.width, mt, margColor);
+        setRect(refs.marBottom, marginBox.left, borderBox.top + borderBox.height, marginBox.width, mb, margColor);
+        setRect(refs.marLeft, marginBox.left, borderBox.top, ml, borderBox.height, margColor);
+        setRect(refs.marRight, borderBox.left + borderBox.width, borderBox.top, mr, borderBox.height, margColor);
+
+        // Outline
+        const isEditable = element.hasAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR);
+        const outlineColor = isEditable ? COLORS.outlineEditable : COLORS.outlineNonEditable;
+        const outlineStyle = refs.outline.style;
+        outlineStyle.left = (borderBox.left - mLeft) + "px";
+        outlineStyle.top = (borderBox.top - marginBox.top) + "px";
+        outlineStyle.width = borderBox.width + "px";
+        outlineStyle.height = borderBox.height + "px";
+        outlineStyle.border = `1px solid ${outlineColor}`;
+    }
+
+    function Highlight(trigger) {
         this.trigger = !!trigger;
         this.elements = [];
         this.selector = "";
+        this._overlays = [];
     }
 
     Highlight.prototype = {
-        _elementExists: function (element) {
-            var i;
-            for (i in this.elements) {
-                if (this.elements[i] === element) {
-                    return true;
-                }
-            }
-            return false;
-        },
-        _makeHighlightDiv: function (element, doAnimation) {
-            const remoteHighlight = {
-                animateStartValue: {
-                    "background-color": "rgba(0, 162, 255, 0.5)",
-                    "opacity": 0
-                },
-                animateEndValue: {
-                    "background-color": "rgba(0, 162, 255, 0)",
-                    "opacity": 0.6
-                },
-                paddingStyling: {
-                    "background-color": "rgba(200, 249, 197, 0.7)"
-                },
-                marginStyling: {
-                    "background-color": "rgba(249, 204, 157, 0.7)"
-                },
-                borderColor: "rgba(200, 249, 197, 0.85)",
-                showPaddingMargin: true
-            };
-            var elementBounds = element.getBoundingClientRect(),
-                highlightDiv = window.document.createElement("div"),
-                elementStyling = window.getComputedStyle(element),
-                transitionDuration = parseFloat(elementStyling.getPropertyValue('transition-duration')),
-                animationDuration = parseFloat(elementStyling.getPropertyValue('animation-duration'));
-
-            highlightDiv.trackingElement = element; // save which node are we highlighting
-
-            if (doAnimation) {
-                if (transitionDuration) {
-                    animateHighlight(transitionDuration);
-                }
-
-                if (animationDuration) {
-                    animateHighlight(animationDuration);
-                }
-            }
-
-            // Don't highlight elements with 0 width & height
-            if (elementBounds.width === 0 && elementBounds.height === 0) {
-                return;
-            }
-
-            var realElBorder = {
-                right: elementStyling.getPropertyValue('border-right-width'),
-                left: elementStyling.getPropertyValue('border-left-width'),
-                top: elementStyling.getPropertyValue('border-top-width'),
-                bottom: elementStyling.getPropertyValue('border-bottom-width')
-            };
-
-            var borderBox = elementStyling.boxSizing === 'border-box';
-
-            var innerWidth = parseFloat(elementStyling.width),
-                innerHeight = parseFloat(elementStyling.height),
-                outerHeight = innerHeight,
-                outerWidth = innerWidth;
-
-            if (!borderBox) {
-                innerWidth += parseFloat(elementStyling.paddingLeft) + parseFloat(elementStyling.paddingRight);
-                innerHeight += parseFloat(elementStyling.paddingTop) + parseFloat(elementStyling.paddingBottom);
-                outerWidth = innerWidth + parseFloat(realElBorder.right) +
-                parseFloat(realElBorder.left),
-                outerHeight = innerHeight + parseFloat(realElBorder.bottom) + parseFloat(realElBorder.top);
-            }
-
-
-            var visualisations = {
-                horizontal: "left, right",
-                vertical: "top, bottom"
-            };
-
-            var drawPaddingRect = function (side) {
-                var elStyling = {};
-
-                if (visualisations.horizontal.indexOf(side) >= 0) {
-                    elStyling["width"] = elementStyling.getPropertyValue("padding-" + side);
-                    elStyling["height"] = innerHeight + "px";
-                    elStyling["top"] = 0;
-
-                    if (borderBox) {
-                        elStyling["height"] =
-                            innerHeight - parseFloat(realElBorder.top) - parseFloat(realElBorder.bottom) + "px";
-                    }
-                } else {
-                    elStyling["height"] = elementStyling.getPropertyValue("padding-" + side);
-                    elStyling["width"] = innerWidth + "px";
-                    elStyling["left"] = 0;
-
-                    if (borderBox) {
-                        elStyling["width"] =
-                            innerWidth - parseFloat(realElBorder.left) - parseFloat(realElBorder.right) + "px";
-                    }
-                }
-
-                elStyling[side] = 0;
-                elStyling["position"] = "absolute";
-
-                return elStyling;
-            };
-
-            var drawMarginRect = function (side) {
-                var elStyling = {};
-
-                var margin = [];
-                margin["right"] = parseFloat(elementStyling.getPropertyValue("margin-right"));
-                margin["top"] = parseFloat(elementStyling.getPropertyValue("margin-top"));
-                margin["bottom"] = parseFloat(elementStyling.getPropertyValue("margin-bottom"));
-                margin["left"] = parseFloat(elementStyling.getPropertyValue("margin-left"));
-
-                if (visualisations["horizontal"].indexOf(side) >= 0) {
-                    elStyling["width"] = elementStyling.getPropertyValue("margin-" + side);
-                    elStyling["height"] = outerHeight + margin["top"] + margin["bottom"] + "px";
-                    elStyling["top"] = "-" + (margin["top"] + parseFloat(realElBorder.top)) + "px";
-                } else {
-                    elStyling["height"] = elementStyling.getPropertyValue("margin-" + side);
-                    elStyling["width"] = outerWidth + "px";
-                    elStyling["left"] = "-" + realElBorder.left;
-                }
-
-                elStyling[side] = "-" + (margin[side] + parseFloat(realElBorder[side])) + "px";
-                elStyling["position"] = "absolute";
-
-                return elStyling;
-            };
-
-            var setVisibility = function (el) {
-                if (
-                    !remoteHighlight.showPaddingMargin ||
-                    parseInt(el.height, 10) <= 0 ||
-                    parseInt(el.width, 10) <= 0
-                ) {
-                    el.display = 'none';
-                } else {
-                    el.display = 'block';
-                }
-            };
-
-            var paddingVisualisations = [
-                drawPaddingRect("top"),
-                drawPaddingRect("right"),
-                drawPaddingRect("bottom"),
-                drawPaddingRect("left")
-            ];
-
-            var marginVisualisations = [
-                drawMarginRect("top"),
-                drawMarginRect("right"),
-                drawMarginRect("bottom"),
-                drawMarginRect("left")
-            ];
-
-            var setupVisualisations = function (arr, visualConfig) {
-                var i;
-                for (i = 0; i < arr.length; i++) {
-                    setVisibility(arr[i]);
-
-                    // Applies to every visualisationElement (padding or margin div)
-                    arr[i]["transform"] = "none";
-                    var el = window.document.createElement("div"),
-                        styles = Object.assign({}, visualConfig, arr[i]);
-
-                    _setStyleValues(styles, el.style);
-
-                    highlightDiv.appendChild(el);
-                }
-            };
-
-            setupVisualisations(
-                marginVisualisations,
-                remoteHighlight.marginStyling
-            );
-            setupVisualisations(
-                paddingVisualisations,
-                remoteHighlight.paddingStyling
-            );
-
-            highlightDiv.className = GLOBALS.HIGHLIGHT_CLASSNAME;
-
-            var offset = LivePreviewView.screenOffset(element);
-
-            // some code to find element left/top was removed here. This seems to be relevant to box model
-            // live highlights. firether reading: https://github.com/adobe/brackets/pull/13357/files
-            // we removed this in phoenix because it was throwing the rendering of live highlight boxes in phonix
-            // default project at improper places. Some other cases might fail as the above code said they
-            // introduces that removed computation for fixing some box-model regression. If you are here to fix a
-            // related bug, check history of this changes in git.
-
-            var stylesToSet = {
-                "left": offset.left + "px",
-                "top": offset.top + "px",
-                "width": elementBounds.width + "px",
-                "height": elementBounds.height + "px",
-                "z-index": 2147483645,
-                "margin": 0,
-                "padding": 0,
-                "position": "absolute",
-                "pointer-events": "none",
-                "box-shadow": "0 0 1px #fff",
-                "box-sizing": elementStyling.getPropertyValue('box-sizing'),
-                "border-right": elementStyling.getPropertyValue('border-right'),
-                "border-left": elementStyling.getPropertyValue('border-left'),
-                "border-top": elementStyling.getPropertyValue('border-top'),
-                "border-bottom": elementStyling.getPropertyValue('border-bottom'),
-                "border-color": remoteHighlight.borderColor
-            };
-
-            var mergedStyles = Object.assign({}, stylesToSet,  remoteHighlight.stylesToSet);
-
-            var animateStartValues = remoteHighlight.animateStartValue;
-
-            var animateEndValues = remoteHighlight.animateEndValue;
-
-            var transitionValues = {
-                "transition-property": "opacity, background-color, transform",
-                "transition-duration": "300ms, 2.3s"
-            };
-
-            function _setStyleValues(styleValues, obj) {
-                var prop;
-
-                for (prop in styleValues) {
-                    obj.setProperty(prop, styleValues[prop]);
-                }
-            }
-
-            _setStyleValues(mergedStyles, highlightDiv.style);
-            _setStyleValues(
-                doAnimation ? animateStartValues : animateEndValues,
-                highlightDiv.style
-            );
-
-
-            if (doAnimation) {
-                _setStyleValues(transitionValues, highlightDiv.style);
-
-                window.setTimeout(function () {
-                    _setStyleValues(animateEndValues, highlightDiv.style);
-                }, 20);
-            }
-
-            window.document.body.appendChild(highlightDiv);
-        },
-
-        add: function (element, doAnimation) {
-            if (this._elementExists(element) || element === window.document) {
+        add: function (element) {
+            if (this.elements.includes(element) || element === window.document) {
                 return;
             }
             if (this.trigger) {
@@ -531,41 +485,51 @@ function RemoteFunctions(config = {}) {
             }
 
             this.elements.push(element);
-            this._makeHighlightDiv(element, doAnimation);
+            const overlay = _getOverlay();
+            this._overlays.push(overlay);
+            _updateOverlay(overlay, element);
         },
 
         clear: function () {
-            var i, highlights = window.document.querySelectorAll("." + GLOBALS.HIGHLIGHT_CLASSNAME),
-                body = window.document.body;
+            this._overlays.forEach(function (overlay) {
+                _releaseOverlay(overlay);
+            });
+            this._overlays = [];
 
-            for (i = 0; i < highlights.length; i++) {
-                body.removeChild(highlights[i]);
-            }
-
-            for (i = 0; i < this.elements.length; i++) {
-                if (this.trigger) {
-                    _trigger(this.elements[i], "highlight", 0);
-                }
-                clearElementBackground(this.elements[i]);
+            if (this.trigger) {
+                this.elements.forEach(function (el) {
+                    _trigger(el, "highlight", 0);
+                });
             }
 
             this.elements = [];
+            // Reset the cached selector so that redraw() uses the elements
+            // array instead of re-querying the DOM with a stale selector.
+            // Without this, a selector like [data-brackets-id='3'] persists
+            // after the element is replaced (e.g. tag name change assigns a
+            // new ID), causing redraw() to find zero matches and release
+            // all overlays — making the highlight vanish.
+            this.selector = "";
         },
 
         redraw: function () {
-            var i, highlighted;
+            const elements = this.selector
+                ? Array.from(window.document.querySelectorAll(this.selector))
+                : this.elements.slice();
 
-            // When redrawing a selector-based highlight, run a new selector
-            // query to ensure we have the latest set of elements to highlight.
-            if (this.selector) {
-                highlighted = window.document.querySelectorAll(this.selector);
-            } else {
-                highlighted = this.elements.slice(0);
+            // Adjust overlay count to match element count
+            while (this._overlays.length > elements.length) {
+                _releaseOverlay(this._overlays.pop());
+            }
+            while (this._overlays.length < elements.length) {
+                this._overlays.push(_getOverlay());
             }
 
-            this.clear();
-            for (i = 0; i < highlighted.length; i++) {
-                this.add(highlighted[i], false);
+            this.elements = elements;
+
+            // Update all overlays in place — no DOM creation or destruction
+            for (let i = 0; i < elements.length; i++) {
+                _updateOverlay(this._overlays[i], elements[i]);
             }
         }
     };
@@ -581,19 +545,42 @@ function RemoteFunctions(config = {}) {
         return getHighlightMode() !== "click";
     }
 
-    // helper function to clear element background highlighting
-    function clearElementBackground(element) {
-        if (element._originalBackgroundColor !== undefined) {
-            element.style.backgroundColor = element._originalBackgroundColor;
-        } else {
-            // only clear background if it's currently a highlight color, not if it's an original user style
-            const currentBg = element.style.backgroundColor;
-            if (currentBg === "rgba(0, 162, 255, 0.2)" || currentBg.includes("rgba(0, 162, 255")) {
-                element.style.backgroundColor = "";
-            }
-            // if it's some other color, we just leave it as is - it's likely a user-defined style
+    /**
+     * Applies the current hover state in a single batched DOM update.
+     * Called once per animation frame via requestAnimationFrame.
+     * _lastHoverTarget holds the element to highlight (or null to clear).
+     */
+    function _applyHoverState() {
+        _pendingHoverRAF = null;
+
+        if (!_hoverHighlight || !shouldShowHighlightOnHover()) {
+            return;
         }
-        delete element._originalBackgroundColor;
+
+        _hoverHighlight.clear();
+        const hoverBoxHandler = LivePreviewView.getToolHandler("HoverBox");
+        if (hoverBoxHandler) {
+            hoverBoxHandler.dismiss();
+        }
+
+        const element = _lastHoverTarget;
+
+        if (element && (element !== previouslySelectedElement || _selectedFromEditor)) {
+            _hoverHighlight.add(element);
+            if (hoverBoxHandler) {
+                hoverBoxHandler.showHoverBox(element);
+            }
+        }
+    }
+
+    /**
+     * Schedules a hover state update for the next animation frame.
+     * Multiple calls within one frame collapse into a single DOM update.
+     */
+    function _scheduleHoverUpdate() {
+        if (!_pendingHoverRAF) {
+            _pendingHoverRAF = requestAnimationFrame(_applyHoverState);
+        }
     }
 
     function onElementHover(event) {
@@ -602,36 +589,29 @@ function RemoteFunctions(config = {}) {
         if (SHARED_STATE.isAutoScrolling || SHARED_STATE._isDraggingSVG) {
             return;
         }
+        if (customReturns.selectorBox && customReturns.selectorBox.isOpen &&
+                customReturns.selectorBox.isOpen()) {
+            return;
+        }
 
         const element = event.target;
         if(!LivePreviewView.isElementInspectable(element) || element.nodeType !== Node.ELEMENT_NODE) {
-            return false;
+            return;
         }
-        if(element && (element.closest('.phcode-no-lp-edit') || element.classList.contains('phcode-no-lp-edit-this'))) {
-            return false;
+
+        // Same element as last hover — nothing changed, skip entirely
+        if (element === _lastHoverTarget) {
+            return;
         }
+        _lastHoverTarget = element;
 
         // if _hoverHighlight is uninitialized, initialize it
         if (!_hoverHighlight && shouldShowHighlightOnHover()) {
-            _hoverHighlight = new Highlight("#c8f9c5", true);
+            _hoverHighlight = new Highlight(true);
         }
 
-        // this is to check the user's settings, if they want to show the elements highlights on hover or click
         if (_hoverHighlight && shouldShowHighlightOnHover()) {
-            _hoverHighlight.clear();
-
-            // Store original background color to restore on hover out
-            element._originalBackgroundColor = element.style.backgroundColor;
-            element.style.backgroundColor = "rgba(0, 162, 255, 0.2)";
-
-            _hoverHighlight.add(element, false);
-
-            // create the info box for the hovered element
-            const infoBoxHandler = LivePreviewView.getToolHandler("InfoBox");
-            if (infoBoxHandler) {
-                infoBoxHandler.dismiss();
-                infoBoxHandler.createInfoBox(element);
-            }
+            _scheduleHoverUpdate();
         }
     }
 
@@ -640,16 +620,12 @@ function RemoteFunctions(config = {}) {
         if (SHARED_STATE.isAutoScrolling) { return; }
 
         const element = event.target;
-        if(LivePreviewView.isElementEditable(element) && element.nodeType === Node.ELEMENT_NODE) {
-            // this is to check the user's settings, if they want to show the elements highlights on hover or click
+        // Use isElementInspectable (not isElementEditable) so that JS-rendered
+        // elements also get their hover highlight and hover box properly dismissed.
+        if(LivePreviewView.isElementInspectable(element) && element.nodeType === Node.ELEMENT_NODE) {
             if (_hoverHighlight && shouldShowHighlightOnHover()) {
-                _hoverHighlight.clear();
-                clearElementBackground(element);
-                // dismiss the info box
-                const infoBoxHandler = LivePreviewView.getToolHandler("InfoBox");
-                if (infoBoxHandler) {
-                    infoBoxHandler.dismiss();
-                }
+                _lastHoverTarget = null;
+                _scheduleHoverUpdate();
             }
         }
     }
@@ -672,52 +648,76 @@ function RemoteFunctions(config = {}) {
     /**
      * this function is responsible to select an element in the live preview
      * @param {Element} element - The DOM element to select
+     * @param {boolean} [fromEditor] - If true, this is an editor-cursor-driven selection;
+     *   only lightweight highlights (outline, margin/padding overlay) are shown, not interactive
+     *   UI like control box, spacing handles, or measurements.
      */
-    function selectElement(element) {
+    function selectElement(element, fromEditor) {
+        // When a cursor-based highlight re-selects the already-selected element,
+        // just refresh the highlight overlay without dismissing existing UI panels
+        // (control box, editor box, element-info). This prevents cursor activity
+        // after a source edit (e.g., tag name change) from tearing down the
+        // element properties panel and losing its state.
+        if (fromEditor && element === previouslySelectedElement) {
+            if (!_clickHighlight) {
+                _clickHighlight = new Highlight();
+            }
+            _clickHighlight.clear();
+            _clickHighlight.add(element);
+            return;
+        }
+
         dismissUIAndCleanupState();
         // this should also be there when users are in highlight mode
         scrollElementToViewPort(element);
 
-        if(!LivePreviewView.isElementInspectable(element)) {
+        if(!LivePreviewView.isElementInspectable(element, true)) {
             return false;
         }
 
-        // when user clicks on a non-editable element
-        if (!element.hasAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR)) {
-            getAllToolHandlers().forEach(handler => {
-                if (handler.onNonEditableElementClick) {
-                    handler.onNonEditableElementClick(element);
-                }
-            });
-        }
+        // Only invoke tool handlers for user-initiated clicks in the live preview,
+        // not for editor cursor movements which should only show lightweight highlights
+        if (!fromEditor) {
+            // when user clicks on a non-editable element
+            if (!element.hasAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR)) {
+                getAllToolHandlers().forEach(handler => {
+                    if (handler.onNonEditableElementClick) {
+                        handler.onNonEditableElementClick(element);
+                    }
+                });
+            }
 
-        // make sure that the element is actually visible to the user
-        if (isElementVisible(element)) {
-            // Notify handlers about element selection
-            getAllToolHandlers().forEach(handler => {
-                if (handler.onElementSelected) {
-                    handler.onElementSelected(element);
-                }
-            });
+            // make sure that the element is actually visible to the user
+            if (isElementVisible(element)) {
+                // Notify handlers about element selection
+                getAllToolHandlers().forEach(handler => {
+                    if (handler.onElementSelected) {
+                        handler.onElementSelected(element);
+                    }
+                });
+            }
         }
-
-        element._originalOutline = element.style.outline;
-        const outlineColor = element.hasAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR) ? "#4285F4" : "#3C3F41";
-        element.style.outline = `1px solid ${outlineColor}`;
 
         if (!_clickHighlight) {
-            _clickHighlight = new Highlight("#cfc");
+            _clickHighlight = new Highlight();
         }
         _clickHighlight.clear();
-        _clickHighlight.add(element, true);
+        _clickHighlight.add(element);
 
         previouslySelectedElement = element;
+        _selectedFromEditor = fromEditor || false;
         window.__current_ph_lp_selected = element;
     }
 
     function disableHoverListeners() {
         window.document.removeEventListener("mouseover", onElementHover);
         window.document.removeEventListener("mouseout", onElementHoverOut);
+        // Cancel any pending rAF hover update so stale callbacks don't fire
+        if (_pendingHoverRAF) {
+            cancelAnimationFrame(_pendingHoverRAF);
+            _pendingHoverRAF = null;
+        }
+        _lastHoverTarget = null;
     }
 
     function enableHoverListeners() {
@@ -767,6 +767,8 @@ function RemoteFunctions(config = {}) {
             event.stopPropagation();
             return;
         }
+        // Opted-out elements: silent no-op so the user's existing selection isn't dismissed.
+        // (isElementInspectable would also reject them, but that path runs dismissUIAndCleanupState.)
         if(element && (element.closest('.phcode-no-lp-edit') || element.classList.contains('phcode-no-lp-edit-this'))) {
             return;
         }
@@ -782,7 +784,8 @@ function RemoteFunctions(config = {}) {
         }
 
         // send cursor movement message to editor so cursor jumps to clicked element
-        if (element.hasAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR)) {
+        if (element.hasAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR) &&
+            config.syncSourceAndPreview !== false) {
             MessageBroker.send({
                 "tagId": element.getAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR),
                 "nodeID": element.id,
@@ -798,7 +801,7 @@ function RemoteFunctions(config = {}) {
         selectElement(element);
     }
 
-    // clear temporary CSS selector highlights
+    // clear CSS selector highlights
     function clearCssSelectorHighlight() {
         if (_cssSelectorHighlightTimer) {
             clearTimeout(_cssSelectorHighlightTimer);
@@ -810,22 +813,22 @@ function RemoteFunctions(config = {}) {
         }
     }
 
-    // create temporary CSS selector highlights for edit mode
+    // create CSS selector highlights for edit mode
     function createCssSelectorHighlight(nodes, rule) {
-        // Clear any existing temporary highlights
+        // Clear any existing highlights
         clearCssSelectorHighlight();
 
-        // Create new temporary highlight for all matching elements
-        _cssSelectorHighlight = new Highlight("#cfc");
-        for (var i = 0; i < nodes.length; i++) {
-            if (LivePreviewView.isElementInspectable(nodes[i], true) && nodes[i].nodeType === Node.ELEMENT_NODE) {
-                _cssSelectorHighlight.add(nodes[i], true);
+        // Highlight all matching elements except the selected one
+        // (it already has a click highlight)
+        _cssSelectorHighlight = new Highlight();
+        for (let i = 0; i < nodes.length; i++) {
+            if (nodes[i] !== previouslySelectedElement &&
+                LivePreviewView.isElementInspectable(nodes[i], true) &&
+                nodes[i].nodeType === Node.ELEMENT_NODE) {
+                _cssSelectorHighlight.add(nodes[i]);
             }
         }
         _cssSelectorHighlight.selector = rule;
-
-        // Clear temporary highlights after 2 seconds
-        _cssSelectorHighlightTimer = setTimeout(clearCssSelectorHighlight, 2000);
     }
 
     // remove active highlights
@@ -844,13 +847,13 @@ function RemoteFunctions(config = {}) {
     // highlight an element
     function highlight(element, clear) {
         if (!_clickHighlight) {
-            _clickHighlight = new Highlight("#cfc");
+            _clickHighlight = new Highlight();
         }
         if (clear) {
             _clickHighlight.clear();
         }
         if (LivePreviewView.isElementInspectable(element, true) && element.nodeType === Node.ELEMENT_NODE) {
-            _clickHighlight.add(element, true);
+            _clickHighlight.add(element);
         }
     }
 
@@ -907,9 +910,22 @@ function RemoteFunctions(config = {}) {
      */
     function highlightRule(rule) {
         hideHighlight();
+
+        // Filter out the universal selector (*) from the rule - highlighting everything
+        // is not useful, similar to how we skip html/body in isElementInspectable.
+        // The rule can be a comma-separated list of selectors (from multi-cursor),
+        // so we filter out any standalone * segments and keep valid ones.
+        rule = rule.split(",").map(s => s.trim()).filter(s => s !== "*").join(",");
+        if (!rule) {
+            dismissUIAndCleanupState();
+            return;
+        }
+
         const nodes = window.document.querySelectorAll(rule);
 
-        // Highlight all matching nodes
+        // Highlight all matching nodes. selectElement() will narrow _clickHighlight
+        // down to the chosen element below; createCssSelectorHighlight() then
+        // re-highlights the siblings in a separate overlay.
         for (let i = 0; i < nodes.length; i++) {
             highlight(nodes[i]);
         }
@@ -918,43 +934,45 @@ function RemoteFunctions(config = {}) {
             _clickHighlight.selector = rule;
         }
 
-        // Find and select the best element
+        // Both edit and highlight modes go through the same selection path:
+        // selectElement() handles scroll-to-view and the prominent click-highlight,
+        // createCssSelectorHighlight() shows siblings dimly. fromEditor=true
+        // suppresses tool-handler invocation, so highlight mode gets the
+        // highlighting/scroll behavior without any UI boxes.
         const { element, skipSelection } = findBestElementToSelect(nodes, rule);
 
         if (!skipSelection) {
             if (element) {
-                selectElement(element);
+                selectElement(element, true);
             } else {
                 // No valid element found, dismiss UI
                 dismissUIAndCleanupState();
             }
         }
 
-        // In edit mode, create temporary highlights AFTER selection to avoid clearing
-        if (config.mode === 'edit') {
-            createCssSelectorHighlight(nodes, rule);
-        }
+        createCssSelectorHighlight(nodes, rule);
     }
 
     // recreate UI boxes so that they are placed properly
     function redrawUIBoxes() {
-        if (SHARED_STATE._toolBox) {
-            const element = SHARED_STATE._toolBox.element;
-            const toolBoxHandler = LivePreviewView.getToolHandler("ToolBox");
-            if (toolBoxHandler) {
-                toolBoxHandler.dismiss();
-                toolBoxHandler.createToolBox(element);
-            }
-        }
+        // commented out for unified box redesign
+        // if (SHARED_STATE._toolBox) {
+        //     const element = SHARED_STATE._toolBox.element;
+        //     const toolBoxHandler = LivePreviewView.getToolHandler("ToolBox");
+        //     if (toolBoxHandler) {
+        //         toolBoxHandler.dismiss();
+        //         toolBoxHandler.createToolBox(element);
+        //     }
+        // }
 
-        if (SHARED_STATE._infoBox) {
-            const element = SHARED_STATE._infoBox.element;
-            const infoBoxHandler = LivePreviewView.getToolHandler("InfoBox");
-            if (infoBoxHandler) {
-                infoBoxHandler.dismiss();
-                infoBoxHandler.createInfoBox(element);
-            }
-        }
+        // if (SHARED_STATE._infoBox) {
+        //     const element = SHARED_STATE._infoBox.element;
+        //     const infoBoxHandler = LivePreviewView.getToolHandler("InfoBox");
+        //     if (infoBoxHandler) {
+        //         infoBoxHandler.dismiss();
+        //         infoBoxHandler.createInfoBox(element);
+        //     }
+        // }
     }
 
     // redraw active highlights
@@ -979,7 +997,18 @@ function RemoteFunctions(config = {}) {
         });
     }
 
-    window.addEventListener("resize", redrawEverything);
+    // Throttle resize redraws to one per animation frame — avoids redundant
+    // layout reads when the browser fires multiple resize events per frame.
+    let _pendingResizeRAF = null;
+    function _onWindowResize() {
+        if (!_pendingResizeRAF) {
+            _pendingResizeRAF = requestAnimationFrame(function () {
+                _pendingResizeRAF = null;
+                redrawEverything();
+            });
+        }
+    }
+    window.addEventListener("resize", _onWindowResize);
 
     /**
      * Constructor
@@ -1257,10 +1286,82 @@ function RemoteFunctions(config = {}) {
         this.rememberedNodes = {};
 
         // this check makes sure that if the element is no more in the DOM then we remove it
-        if (previouslySelectedElement && !previouslySelectedElement.isConnected) {
-            dismissUIAndCleanupState();
+        // skip this check if suppression is active (e.g., when some internal feature updates source)
+        if (!SHARED_STATE._suppressDOMEditDismissal) {
+            if (previouslySelectedElement && !previouslySelectedElement.isConnected) {
+                dismissUIAndCleanupState();
+            } else {
+                redrawEverything();
+            }
         } else {
-            redrawEverything();
+            // Suppression is active (e.g., control box initiated a source edit)
+            if (previouslySelectedElement && !previouslySelectedElement.isConnected) {
+                let freshElement = null;
+
+                // Strategy 1: Tree path (most reliable — works even with duplicate
+                // text content and tag changes). Stored when suppression was activated.
+                if (SHARED_STATE._suppressedElementPath) {
+                    freshElement = _getElementByTreePath(SHARED_STATE._suppressedElementPath);
+                }
+
+                // Strategy 2: brackets-id (works when IDs are preserved)
+                if (!freshElement) {
+                    const bracketsId = previouslySelectedElement.getAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR);
+                    if (bracketsId) {
+                        freshElement = document.querySelector(
+                            '[' + GLOBALS.DATA_BRACKETS_ID_ATTR + '="' + bracketsId + '"]'
+                        );
+                    }
+                }
+
+                // Strategy 3: Text + tag match (fallback — search reverse for deepest match)
+                if (!freshElement) {
+                    const oldText = previouslySelectedElement.textContent;
+                    const oldTag = previouslySelectedElement.tagName;
+                    let candidates = document.querySelectorAll(
+                        oldTag.toLowerCase() + '[' + GLOBALS.DATA_BRACKETS_ID_ATTR + ']'
+                    );
+                    for (let i = candidates.length - 1; i >= 0; i--) {
+                        if (candidates[i].textContent === oldText) {
+                            freshElement = candidates[i];
+                            break;
+                        }
+                    }
+                    // Broaden if tag changed (e.g. h2→footer)
+                    if (!freshElement) {
+                        candidates = document.querySelectorAll('[' + GLOBALS.DATA_BRACKETS_ID_ATTR + ']');
+                        for (let i = candidates.length - 1; i >= 0; i--) {
+                            if (candidates[i].textContent === oldText) {
+                                freshElement = candidates[i];
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (freshElement) {
+                    if (_clickHighlight) {
+                        _clickHighlight.clear();
+                        _clickHighlight.add(freshElement);
+                    }
+                    previouslySelectedElement = freshElement;
+                    window.__current_ph_lp_selected = freshElement;
+                    // After element replacement (e.g., tag name change), the old
+                    // DOM node is gone.  Patch the element reference on any
+                    // existing UI boxes so that position() doesn't bail on a
+                    // disconnected node and future syncs resolve correctly.
+                    // We update references directly rather than calling
+                    // handler.updateContent() to avoid side-effects like
+                    // re-creating a dismissed control box.
+                    if (SHARED_STATE._controlBox) {
+                        SHARED_STATE._controlBox.element = freshElement;
+                    }
+                    if (SHARED_STATE._editorBox) {
+                        SHARED_STATE._editorBox.element = freshElement;
+                    }
+                    redrawEverything();
+                }
+            }
         }
     };
 
@@ -1291,12 +1392,30 @@ function RemoteFunctions(config = {}) {
             SHARED_STATE._hotCorner.updateState(config.mode === 'preview', true);
         }
 
+        // Clear highlights when sync is turned off
+        const syncTurnedOff = oldConfig.syncSourceAndPreview !== false &&
+            config.syncSourceAndPreview === false;
+
         // Handle configuration changes
-        if (highlightModeChanged || isModeChanged) {
+        if (highlightModeChanged || isModeChanged || syncTurnedOff) {
             _handleConfigurationChange();
         }
 
+        // Preserve the currently selected element across re-registration
+        // so that toggling options (e.g. show measurements)
+        // doesn't clear the element highlighting.
+        const selectedBeforeReregister = previouslySelectedElement;
         registerHandlers();
+        if (!isModeChanged && !highlightModeChanged && !syncTurnedOff
+            && selectedBeforeReregister && config.mode === 'edit') {
+            // Restore the click highlight for the previously selected element
+            if (!_clickHighlight) {
+                _clickHighlight = new Highlight(true);
+            }
+            _clickHighlight.add(selectedBeforeReregister);
+            previouslySelectedElement = selectedBeforeReregister;
+            window.__current_ph_lp_selected = selectedBeforeReregister;
+        }
         return JSON.stringify(config);
     }
 
@@ -1313,19 +1432,22 @@ function RemoteFunctions(config = {}) {
      */
     function cleanupPreviousElementState() {
         if (previouslySelectedElement) {
-            if (previouslySelectedElement._originalOutline !== undefined) {
-                previouslySelectedElement.style.outline = previouslySelectedElement._originalOutline;
-            } else {
-                previouslySelectedElement.style.outline = "";
-            }
-            delete previouslySelectedElement._originalOutline;
             previouslySelectedElement = null;
             window.__current_ph_lp_selected = null;
         }
 
-        if (config.mode === 'edit') {
-            hideHighlight();
+        // Reset hover tracking so the same-element skip doesn't suppress
+        // re-highlighting after a full state cleanup (e.g. Escape, dismiss).
+        _lastHoverTarget = null;
+        if (_pendingHoverRAF) {
+            cancelAnimationFrame(_pendingHoverRAF);
+            _pendingHoverRAF = null;
+        }
 
+        // Highlight.clear() removes all overlay divs (outline + margin/padding rects)
+        hideHighlight();
+
+        if (config.mode === 'edit') {
             // Notify handlers about cleanup
             getAllToolHandlers().forEach(handler => {
                 if (handler.onElementCleanup) {
@@ -1333,6 +1455,66 @@ function RemoteFunctions(config = {}) {
                 }
             });
         }
+    }
+
+    /**
+     * Compute the tree path of an element as an array of child indices
+     * from <html> down. Used to re-locate the element after re-instrumentation
+     * when data-brackets-id changes and text matching is ambiguous.
+     * E.g. [1, 0, 0, 1] means html > 2nd child > 1st child > 1st child > 2nd child.
+     */
+    function _getTreePath(element) {
+        const path = [];
+        let el = element;
+        while (el && el.parentElement) {
+            const parent = el.parentElement;
+            const children = parent.children;
+            for (let i = 0; i < children.length; i++) {
+                if (children[i] === el) {
+                    path.unshift(i);
+                    break;
+                }
+            }
+            el = parent;
+        }
+        return path;
+    }
+
+    /**
+     * Find an element by its tree path (array of child indices from <html>).
+     */
+    function _getElementByTreePath(path) {
+        let el = document.documentElement;
+        for (let i = 0; i < path.length; i++) {
+            if (!el || !el.children || !el.children[path[i]]) {
+                return null;
+            }
+            el = el.children[path[i]];
+        }
+        return el;
+    }
+
+    /**
+     * Temporarily suppress the DOM edit dismissal check in apply()
+     * Used when source is modified from UI panels to prevent
+     * the panel from being dismissed when the DOM is updated.
+     * @param {Number} durationMs - Duration in milliseconds to suppress (default 100)
+     */
+    function suppressDOMEditDismissal(durationMs) {
+        durationMs = durationMs || 100;
+        if (SHARED_STATE._suppressDOMEditDismissalTimeout) {
+            clearTimeout(SHARED_STATE._suppressDOMEditDismissalTimeout);
+        }
+        SHARED_STATE._suppressDOMEditDismissal = true;
+        // Store the tree path while the element is still connected
+        if (previouslySelectedElement && previouslySelectedElement.isConnected) {
+            SHARED_STATE._suppressedElementPath = _getTreePath(previouslySelectedElement);
+        }
+        SHARED_STATE._suppressDOMEditDismissalTimeout = setTimeout(function() {
+            SHARED_STATE._suppressDOMEditDismissal = false;
+            SHARED_STATE._suppressDOMEditDismissalTimeout = null;
+            SHARED_STATE._suppressedElementPath = null;
+        }, durationMs);
     }
 
     /**
@@ -1350,6 +1532,11 @@ function RemoteFunctions(config = {}) {
     function registerHandlers() {
         hideHighlight(); // clear previous highlighting
         disableHoverListeners(); // Always remove existing listeners first to avoid duplicates
+        // Cancel any pending resize RAF so stale callbacks don't fire after re-init
+        if (_pendingResizeRAF) {
+            cancelAnimationFrame(_pendingResizeRAF);
+            _pendingResizeRAF = null;
+        }
         getAllToolHandlers().forEach(handler => {
             if (handler.unregisterInteractionBlocker) {
                 handler.unregisterInteractionBlocker();
@@ -1357,11 +1544,8 @@ function RemoteFunctions(config = {}) {
         });
 
         if (config.mode === 'edit') {
-            // Initialize hover highlight with Chrome-like colors
-            _hoverHighlight = new Highlight("#c8f9c5", true); // Green similar to Chrome's padding color
-
-            // Initialize click highlight with animation
-            _clickHighlight = new Highlight("#cfc", true); // Light green for click highlight
+            _hoverHighlight = new Highlight(true);
+            _clickHighlight = new Highlight(true);
 
             // register the event handlers
             enableHoverListeners();
@@ -1394,6 +1578,41 @@ function RemoteFunctions(config = {}) {
         });
     }
 
+    // Modifier shortcuts forwarded to the Phoenix KeyBindingManager. Clipboard
+    // and undo/redo are excluded so form inputs in the previewed page keep
+    // working normally.
+    const _KEYS_NOT_FORWARDED = { c:1, v:1, x:1, a:1, z:1, y:1, C:1, V:1, X:1, A:1, Z:1, Y:1 };
+
+    // Forwarding only makes sense when the page runs as an embedded LP iframe
+    // inside Phoenix; if the user popped the preview out into a real browser
+    // tab, the synthetic events would go to a window with no Phoenix UI.
+    // Default false, flip to true via __PHOENIX_EMBED_INFO (per its contract:
+    // guaranteed to fire in embedded iframes, not guaranteed otherwise).
+    let _isPhoenixEmbeddedIframe = false;
+    if (window.__PHOENIX_EMBED_INFO && window.__PHOENIX_EMBED_INFO.onPhoenixEmbeddedInfoAvailable) {
+        window.__PHOENIX_EMBED_INFO.onPhoenixEmbeddedInfoAvailable(function (isEmbedded) {
+            _isPhoenixEmbeddedIframe = !!isEmbedded;
+        });
+    }
+
+    function _isFunctionKey(event) {
+        return event.key.length >= 2 && event.key[0] === 'F' && !isNaN(event.key.slice(1));
+    }
+
+    function _forwardKeyEventToPhoenix(event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        MessageBroker.send({
+            keyForward: true,
+            key: event.key,
+            code: event.code,
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey,
+            shiftKey: event.shiftKey,
+            altKey: event.altKey
+        });
+    }
+
     document.addEventListener('keydown', function(event) {
         if (config.mode === 'edit' && (event.key === 'Escape' || event.key === 'Esc')) {
             event.preventDefault();
@@ -1401,13 +1620,77 @@ function RemoteFunctions(config = {}) {
         }
     });
 
+    // Forwarder for design mode: runs as late as we can manage in the standard
+    // event flow — bubble phase on `window` (latest target after document),
+    // and the listener itself is registered on `load` so it goes last among
+    // same-target listeners. This gives the previewed page's own handlers the
+    // best chance to call preventDefault (which we then honor) before we
+    // forward to Phoenix.
+    function _designModeKeyForwarder(event) {
+        if (!_isPhoenixEmbeddedIframe || !config.designMode) {
+            return;
+        }
+        if (event.defaultPrevented) {
+            return;
+        }
+        if (_isFunctionKey(event)) {
+            _forwardKeyEventToPhoenix(event);
+            return;
+        }
+        const isMod = event.metaKey || event.ctrlKey;
+        if (isMod && event.key && event.key.length === 1 && !_KEYS_NOT_FORWARDED[event.key]) {
+            _forwardKeyEventToPhoenix(event);
+        }
+    }
+
     // we need to refresh the config once the load is completed
     // this is important because messageBroker gets ready for use only when load fires
     window.addEventListener('load', function() {
+        window.addEventListener('keydown', _designModeKeyForwarder);
         MessageBroker.send({
             requestConfigRefresh: true
         });
     });
+
+    function getMode() {
+        return config.mode;
+    }
+
+    function isSyncEnabled() {
+        return config.syncSourceAndPreview !== false;
+    }
+
+    function getHighlightCount() {
+        if (!_highlightShadowRoot) { return 0; }
+        return _highlightShadowRoot.querySelectorAll('.overlay-container:not(.hidden)').length;
+    }
+
+    function getHighlightTrackingElement(index) {
+        if (!_highlightShadowRoot) { return null; }
+        const overlay = _highlightShadowRoot.querySelectorAll('.overlay-container:not(.hidden)')[index];
+        if (!overlay || !overlay.trackingElement) { return null; }
+        const el = overlay.trackingElement;
+        return {
+            id: el.id,
+            classList: Array.from(el.classList)
+        };
+    }
+
+    function getHighlightStyle(index, property) {
+        if (!_highlightShadowRoot) { return null; }
+        const overlay = _highlightShadowRoot.querySelectorAll('.overlay-container:not(.hidden)')[index];
+        return overlay ? overlay.style[property] : null;
+    }
+
+    function setHotCornerHidden(hidden) {
+        if (SHARED_STATE._hotCorner && SHARED_STATE._hotCorner.hotCorner) {
+            if (hidden) {
+                SHARED_STATE._hotCorner.hotCorner.classList.add('hc-hidden');
+            } else {
+                SHARED_STATE._hotCorner.hotCorner.classList.remove('hc-hidden');
+            }
+        }
+    }
 
     let customReturns = {};
     // only apis that needs to be called from phoenix js layer should be customReturns. APis that are shared within
@@ -1416,7 +1699,7 @@ function RemoteFunctions(config = {}) {
     customReturns = { // we have to do this else the minifier will strip the customReturns variable
         ...customReturns,
         "DOMEditHandler": DOMEditHandler,
-        "hideHighlight": hideHighlight,
+        "hideHighlight": dismissUIAndCleanupState,
         "highlight": highlight,
         "highlightRule": highlightRule,
         "redrawHighlights": redrawHighlights,
@@ -1425,7 +1708,13 @@ function RemoteFunctions(config = {}) {
         "updateConfig": updateConfig,
         "dismissUIAndCleanupState": dismissUIAndCleanupState,
         "escapeKeyPressInEditor": _handleEscapeKeyPress,
-        "getMode": function() { return config.mode; }
+        "getMode": getMode,
+        "isSyncEnabled": isSyncEnabled,
+        "suppressDOMEditDismissal": suppressDOMEditDismissal,
+        "getHighlightCount": getHighlightCount,
+        "getHighlightTrackingElement": getHighlightTrackingElement,
+        "getHighlightStyle": getHighlightStyle,
+        "setHotCornerHidden": setHotCornerHidden
     };
 
     // the below code comment is replaced by added scripts for extensibility

@@ -32,12 +32,47 @@ define(function (require, exports, module) {
 
     describe("livepreview:MultiBrowser Live Preview", function () {
 
+        function _getLivePreviewIFrame() {
+            return testWindow.document.getElementById("panel-live-preview-frame");
+        }
+
+        function _getMdPreviewIFrame() {
+            return testWindow.document.getElementById("panel-md-preview-frame");
+        }
+
+        function _getPreviewIFrame() {
+            return _getMdPreviewIFrame() || _getLivePreviewIFrame();
+        }
+
+        function _ensureMdReaderMode() {
+            const mdIFrame = _getMdPreviewIFrame();
+            if (mdIFrame && mdIFrame.contentWindow) {
+                mdIFrame.contentWindow.postMessage({
+                    type: "MDVIEWR_SET_EDIT_MODE",
+                    editMode: false
+                }, "*");
+            }
+        }
+
         async function _waitForIframeSrc(name) {
             await awaitsFor(() => {
-                let outerIFrame = testWindow.document.getElementById("panel-live-preview-frame");
+                if (name.endsWith(".md")) {
+                    // For markdown files, check the md iframe is visible with mdViewer loaded
+                    let mdIFrame = _getMdPreviewIFrame();
+                    return mdIFrame && mdIFrame.style.display !== "none" &&
+                        mdIFrame.src && mdIFrame.src.includes("mdViewer");
+                }
+                // For HTML/SVG files, check the live preview iframe src
+                let outerIFrame = _getLivePreviewIFrame();
+                if (!outerIFrame || !outerIFrame.src) { return false; }
                 let srcURL = new URL(outerIFrame.src);
                 return srcURL.pathname.endsWith(name) === true;
             }, "waiting for name- " + name);
+            // Ensure md viewer is in reader mode for tests
+            if (name.endsWith(".md")) {
+                _ensureMdReaderMode();
+                await awaits(100);
+            }
         }
 
         if (Phoenix.isTestWindowPlaywright && !Phoenix.browser.desktop.isChromeBased) {
@@ -92,7 +127,7 @@ define(function (require, exports, module) {
                 // we have to popout a new window and cant use the embedded iframe for live preview integ tests
                 // as Firefox sandbox prevents service worker access from nexted iframes.
                 // In tauri, we use node server, so this limitation doesn't apply in tauri, and we stick to iframes.
-                const useWindowInsteadOfIframe = (Phoenix.browser.desktop.isFirefox && !window.__TAURI__);
+                const useWindowInsteadOfIframe = Phoenix.browser.desktop.isFirefox;
                 testWindow = await SpecRunnerUtils.createTestWindowAndRun({
                     forceReload: false, useWindowInsteadOfIframe
                 });
@@ -873,19 +908,58 @@ define(function (require, exports, module) {
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(["readme.md"]),
                 "readme.md");
             await awaits(300);
-            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            expect(iFrame.src.endsWith("readme.md")).toBeTrue();
+            _ensureMdReaderMode();
+            await awaits(100);
+            let mdIFrame = _getMdPreviewIFrame();
+            expect(mdIFrame && mdIFrame.src && mdIFrame.src.includes("mdViewer")).toBeTrue();
 
             await awaitsForDone(SpecRunnerUtils.openProjectFiles([SVG_IMAGE_PATH]),
                 SVG_IMAGE_PATH);
             await awaits(500);
-            iFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            let iFrame = _getLivePreviewIFrame();
             let srcURL = new URL(iFrame.src);
             expect(srcURL.pathname.endsWith(SVG_IMAGE_PATH)).toBeTrue();
 
             // now switch back to old file
             await _editFileAndVerifyLivePreview("simple1.html", { line: 11, ch: 45 }, 'hello world ',
                 "testId", "Brackets is hello world hello world awesome!");
+            await endPreviewSession();
+        }, 30000);
+
+        it("should hide play button and mode dropdown when previewing markdown file", async function () {
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "SpecRunnerUtils.openProjectFiles simple1.html");
+
+            await waitsForLiveDevelopmentToOpen();
+
+            // Play button and mode dropdown should be visible for HTML files
+            let $previewBtn = testWindow.$("#previewModeLivePreviewButton");
+            let $modeBtn = testWindow.$("#livePreviewModeBtn");
+            expect($previewBtn.is(":visible")).toBeTrue();
+            expect($modeBtn.is(":visible")).toBeTrue();
+
+            // Open a markdown file
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["readme.md"]),
+                "readme.md");
+            await awaits(300);
+
+            // Play button and mode dropdown should be hidden for markdown files
+            await awaitsFor(() => {
+                return !testWindow.$("#previewModeLivePreviewButton").is(":visible") &&
+                    !testWindow.$("#livePreviewModeBtn").is(":visible");
+            }, "play button and mode dropdown to be hidden");
+
+            // Switch back to HTML file
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "simple1.html");
+            await awaits(300);
+
+            // Play button and mode dropdown should be visible again
+            await awaitsFor(() => {
+                return testWindow.$("#previewModeLivePreviewButton").is(":visible") &&
+                    testWindow.$("#livePreviewModeBtn").is(":visible");
+            }, "play button and mode dropdown to be visible again");
+
             await endPreviewSession();
         }, 30000);
 
@@ -988,7 +1062,7 @@ define(function (require, exports, module) {
 
             await waitsForLiveDevelopmentToOpen();
 
-            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            let iFrame = _getLivePreviewIFrame();
             expect(iFrame.src.endsWith("simple1.html")).toBeTrue();
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(["readme.md"]),
                 "readme.md");
@@ -996,8 +1070,10 @@ define(function (require, exports, module) {
             // now make the active editor loose focus and click on the markdown md for it to
             // trigger focus.
             await awaits(300);
-            let outerIFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            expect(outerIFrame.src.endsWith("readme.md")).toBeTrue();
+            _ensureMdReaderMode();
+            await awaits(100);
+            let outerIFrame = _getMdPreviewIFrame();
+            expect(outerIFrame && outerIFrame.src && outerIFrame.src.includes("mdViewer")).toBeTrue();
             outerIFrame.focus();
             expect(testWindow.document.activeElement).toEqual(outerIFrame);
             outerIFrame.contentWindow.postMessage({
@@ -1022,7 +1098,7 @@ define(function (require, exports, module) {
 
             await waitsForLiveDevelopmentToOpen();
 
-            let iFrame = testWindow.document.getElementById("panel-live-preview-frame");
+            let iFrame = _getLivePreviewIFrame();
             expect(iFrame.src.endsWith("simple1.html")).toBeTrue();
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(["readme.md"]),
                 "readme.md");
@@ -1030,8 +1106,8 @@ define(function (require, exports, module) {
             // now make the active editor loose focus and click on the markdown md for it to
             // trigger focus.
             await awaits(300);
-            let outerIFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            expect(outerIFrame.src.endsWith("readme.md")).toBeTrue();
+            let outerIFrame = _getMdPreviewIFrame();
+            expect(outerIFrame && outerIFrame.src && outerIFrame.src.includes("mdViewer")).toBeTrue();
             outerIFrame.focus();
             expect(testWindow.document.activeElement).toEqual(outerIFrame);
             // now select some /all text in the markdown and click
@@ -1070,8 +1146,8 @@ define(function (require, exports, module) {
                 "readme.md");
 
             await awaits(300);
-            let outerIFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            expect(outerIFrame.src.endsWith("readme.md")).toBeTrue();
+            let outerIFrame = _getMdPreviewIFrame();
+            expect(outerIFrame && outerIFrame.src && outerIFrame.src.includes("mdViewer")).toBeTrue();
 
             // todo check hrefs in markdown. currently we do not have mechanism to exec code image and markdown previews
             // in future we should do this check too.
@@ -1174,8 +1250,8 @@ define(function (require, exports, module) {
                 "external proj/test.md");
 
             await awaits(300);
-            let outerIFrame = testWindow.document.getElementById("panel-live-preview-frame");
-            expect(outerIFrame.src.endsWith("test.md")).toBeTrue();
+            let outerIFrame = _getMdPreviewIFrame();
+            expect(outerIFrame && outerIFrame.src && outerIFrame.src.includes("mdViewer")).toBeTrue();
             await endPreviewSession();
         }, 30000);
 
@@ -1243,16 +1319,16 @@ define(function (require, exports, module) {
             await waitsForLiveDevelopmentToOpen();
             let editor = EditorManager.getActiveEditor();
             editor.setCursorPos({ line: 0, ch: 0 });
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result) => {
+            await forRemoteExec(`_LD.getHighlightCount()`, (result) => {
                 return result === 0;
             });
 
             editor.setCursorPos({ line: 11, ch: 10 });
 
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result) => {
+            await forRemoteExec(`_LD.getHighlightCount()`, (result) => {
                 return result === 1;
             });
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight")[0].trackingElement.id`,
+            await forRemoteExec(`_LD.getHighlightTrackingElement(0).id`,
                 (result) => {
                     return result === 'testId';
                 });
@@ -1265,7 +1341,7 @@ define(function (require, exports, module) {
                 "SpecRunnerUtils.openProjectFiles simple2.html");
 
             await waitsForLiveDevelopmentToOpen();
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result) => {
+            await forRemoteExec(`_LD.getHighlightCount()`, (result) => {
                 return result === 0;
             });
 
@@ -1275,11 +1351,11 @@ define(function (require, exports, module) {
             editor.setCursorPos({ line: 2, ch: 6 });
 
             await awaits(500);
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result) => {
+            await forRemoteExec(`_LD.getHighlightCount()`, (result) => {
                 return result === 3;
             });
             await forRemoteExec(
-                `document.getElementsByClassName("__brackets-ld-highlight")[0].trackingElement.classList[0]`,
+                `_LD.getHighlightTrackingElement(0).classList[0]`,
                 (result) => {
                     return result === 'testClass';
                 });
@@ -1290,11 +1366,11 @@ define(function (require, exports, module) {
             editor.setCursorPos({ line: 0, ch: 1 });
 
             await awaits(500);
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result) => {
+            await forRemoteExec(`_LD.getHighlightCount()`, (result) => {
                 return result === 2;
             });
             await forRemoteExec(
-                `document.getElementsByClassName("__brackets-ld-highlight")[0].trackingElement.classList[0]`,
+                `_LD.getHighlightTrackingElement(0).classList[0]`,
                 (result) => {
                     return result === 'testClass2';
                 });
@@ -1309,30 +1385,30 @@ define(function (require, exports, module) {
 
             await waitsForLiveDevelopmentToOpen();
             let editor = EditorManager.getActiveEditor();
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result) => {
+            await forRemoteExec(`_LD.getHighlightCount()`, (result) => {
                 return result === 0;
             });
 
             editor.setCursorPos({ line: 11, ch: 10 });
 
             await awaits(500);
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result) => {
+            await forRemoteExec(`_LD.getHighlightCount()`, (result) => {
                 return result === 1;
             });
             let originalWidth;
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight")[0].style.width`, (result) => {
+            await forRemoteExec(`_LD.getHighlightStyle(0, 'width')`, (result) => {
                 originalWidth = result;
                 return true;
             });
 
             iFrame.style.width = "100px";
             await awaits(500);
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight")[0].style.width`, (result) => {
+            await forRemoteExec(`_LD.getHighlightStyle(0, 'width')`, (result) => {
                 return originalWidth !== result;
             });
             iFrame.style.width = "100%";
             await awaits(500);
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight")[0].style.width`, (result) => {
+            await forRemoteExec(`_LD.getHighlightStyle(0, 'width')`, (result) => {
                 return originalWidth === result;
             });
 
@@ -1347,16 +1423,16 @@ define(function (require, exports, module) {
             let editor = EditorManager.getActiveEditor();
 
             await awaits(500);
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result) => {
+            await forRemoteExec(`_LD.getHighlightCount()`, (result) => {
                 return result === 0;
             });
             await forRemoteExec(`document.getElementById("testId2").click()`);
 
             await awaits(500);
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result) => {
+            await forRemoteExec(`_LD.getHighlightCount()`, (result) => {
                 return result === 1;
             });
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight")[0].trackingElement.id`,
+            await forRemoteExec(`_LD.getHighlightTrackingElement(0).id`,
                 (result) => {
                     return result === 'testId2';
                 });
@@ -1499,7 +1575,7 @@ define(function (require, exports, module) {
             await waitsForLiveDevelopmentToOpen();
 
             await awaits(1000);
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result) => {
+            await forRemoteExec(`_LD.getHighlightCount()`, (result) => {
                 return result === 0;
             });
 
@@ -1517,10 +1593,10 @@ define(function (require, exports, module) {
             await forRemoteExec(`document.getElementById("testId").click()`);
             await awaits(1000);
 
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result) => {
+            await forRemoteExec(`_LD.getHighlightCount()`, (result) => {
                 return result === 1;
             });
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight")[0].trackingElement.id`,
+            await forRemoteExec(`_LD.getHighlightTrackingElement(0).id`,
                 (result) => {
                     return result === 'testId';
                 });
@@ -1539,7 +1615,7 @@ define(function (require, exports, module) {
             editor && editor.setCursorPos({ line: 0, ch: 0 });
 
             await awaits(500);
-            await forRemoteExec(`document.getElementsByClassName("__brackets-ld-highlight").length`, (result) => {
+            await forRemoteExec(`_LD.getHighlightCount()`, (result) => {
                 return result === 0;
             });
             await forRemoteExec(`document.getElementById("testId2").click()`);
@@ -1688,20 +1764,36 @@ define(function (require, exports, module) {
 
             await waitsForLiveDevelopmentToOpen();
             await awaitsForDone(SpecRunnerUtils.openProjectFiles([`readme.md`]),
-                "SpecRunnerUtils.openProjectFiles simple1.html");
+                "SpecRunnerUtils.openProjectFiles readme.md");
 
             await _waitForIframeSrc(`readme.md`);
             let pinURLBtn = testWindow.$(testWindow.document.getElementById("pinURLButton"));
             pinURLBtn.click();
 
+            // Pin active on readme.md — switch to SVG, md viewer should stay
             await awaitsForDone(SpecRunnerUtils.openProjectFiles([SVG_IMAGE_PATH]),
                 SVG_IMAGE_PATH);
-            await awaits(500);
             await _waitForIframeSrc(`readme.md`);
 
-            pinURLBtn.click();
+            // Switch to HTML file while md is pinned
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]),
+                "open simple1.html while md pinned");
+            // Negative assertion: wait for async switch to settle, then verify it did NOT happen
+            await awaits(500);
+            let mdIFrame = _getMdPreviewIFrame();
+            expect(mdIFrame && mdIFrame.style.display !== "none").toBeTrue();
 
-            await _waitForIframeSrc(SVG_IMAGE_PATH);
+            // Switch to another md file while md is pinned
+            await awaitsForDone(SpecRunnerUtils.openProjectFiles(["sample.md"]),
+                "open sample.md while md pinned");
+            // Negative assertion: wait for async switch to settle, then verify it did NOT happen
+            await awaits(500);
+            mdIFrame = _getMdPreviewIFrame();
+            expect(mdIFrame && mdIFrame.style.display !== "none").toBeTrue();
+
+            // Unpin — should switch to current file (sample.md)
+            pinURLBtn.click();
+            await _waitForIframeSrc(`sample.md`);
 
             await endPreviewSession();
         }, 30000);

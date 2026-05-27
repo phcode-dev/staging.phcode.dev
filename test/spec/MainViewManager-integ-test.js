@@ -19,7 +19,7 @@
  *
  */
 
-/*global describe, beforeEach, beforeAll, afterAll, it, expect, awaitsForDone, spyOn, jasmine, awaitsFor */
+/*global describe, beforeEach, beforeAll, afterAll, afterEach, it, expect, awaitsForDone, spyOn, jasmine, awaitsFor */
 
 define(function (require, exports, module) {
 
@@ -905,7 +905,7 @@ define(function (require, exports, module) {
                 _testPanelDoesntToggleBlocked();
             });
 
-            async function _testPanelToggleSuccess() {
+            async function _testPanelHideSuccess() {
                 panel1.show();
                 expect(panel1.isVisible()).toBeTrue();
 
@@ -915,12 +915,10 @@ define(function (require, exports, module) {
 
                 SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0]);
                 expect(panel1.isVisible()).toBeFalse();
-                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0]);
-                expect(panel1.isVisible()).toBeTrue();
             }
 
-            it("should bottom panel toggle visibility on escape on focus in code editor", async function () {
-                await _testPanelToggleSuccess();
+            it("should escape hide bottom panel when editor is focused", async function () {
+                await _testPanelHideSuccess();
             });
 
             it("should bottom panel not toggle visibility on escape if modal dialog shown", async function () {
@@ -994,7 +992,7 @@ define(function (require, exports, module) {
             it("should dismiss panel if EscapeKeyEventHandler returns false", async function () {
                 function escapeHandler() {return false;}
                 expect(WorkspaceManager.addEscapeKeyEventHandler("x", escapeHandler)).toBeTrue();
-                await _testPanelToggleSuccess();
+                await _testPanelHideSuccess();
 
                 // cleanup
                 expect(WorkspaceManager.removeEscapeKeyEventHandler("x")).toBeTrue();
@@ -1015,10 +1013,11 @@ define(function (require, exports, module) {
                 expect(panel1.isVisible()).toBeTrue();
 
                 expect(MainViewManager.getActivePaneId()).toEqual("first-pane");
-                promise = MainViewManager._open(MainViewManager.FIRST_PANE, FileSystem.getFileForPath(testPath + "/test.js"));
+                promise = MainViewManager._open(MainViewManager.FIRST_PANE, FileSystem.getFileForPath(testPath + "/test.html"));
                 await awaitsForDone(promise, "MainViewManager.doOpen");
                 let editor = EditorManager.getActiveEditor();
-                editor.setCursorPos(0, 0);
+                // Position cursor inside the <p tag name to trigger HTML tag hints
+                editor.setCursorPos(8, 1);
                 await awaitsForDone(CommandManager.execute(Commands.SHOW_CODE_HINTS));
                 await awaitsFor(function () {
                     return testWindow.$(".codehint-menu").is(":visible");
@@ -1031,7 +1030,7 @@ define(function (require, exports, module) {
                 expect(panel1.isVisible()).toBeTrue();
             });
 
-            it("should escape close bottom panel one by one", async function () {
+            it("should escape collapse entire bottom panel container", async function () {
                 panel1.show();
                 expect(panel1.isVisible()).toBeTrue();
                 panel2.show();
@@ -1043,13 +1042,10 @@ define(function (require, exports, module) {
 
                 SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0]);
                 expect(panel2.isVisible()).toBeFalse();
-                expect(panel1.isVisible()).toBeTrue();
-                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0]);
-                expect(panel2.isVisible()).toBeFalse();
                 expect(panel1.isVisible()).toBeFalse();
             });
 
-            it("should escape toggle bottom panel if there is only one shown", async function () {
+            it("should toggle bottom panel back on subsequent escape", async function () {
                 panel1.show();
                 expect(panel1.isVisible()).toBeTrue();
 
@@ -1061,13 +1057,18 @@ define(function (require, exports, module) {
                 expect(panel1.isVisible()).toBeFalse();
                 SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0]);
                 expect(panel1.isVisible()).toBeTrue();
-                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0]);
-                expect(panel1.isVisible()).toBeFalse();
             });
 
-            it("should show closed bottom panel one by one in LRU order if shift-escape is pressed", async function () {
-                panel1.show(); panel2.show();
-                panel1.hide(); panel2.hide();
+            it("should shift-escape focus active panel instead of collapsing", async function () {
+                panel1.show();
+                expect(panel1.isVisible()).toBeTrue();
+
+                let focusCalled = false;
+                panel1.focus = function () {
+                    focusCalled = true;
+                    return true;
+                };
+
                 expect(MainViewManager.getActivePaneId()).toEqual("first-pane");
                 promise = MainViewManager._open(MainViewManager.FIRST_PANE, FileSystem.getFileForPath(testPath + "/test.js"));
                 await awaitsForDone(promise, "MainViewManager.doOpen");
@@ -1075,26 +1076,103 @@ define(function (require, exports, module) {
                 SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0], {
                     shiftKey: true
                 });
-                expect(panel2.isVisible()).toBeTrue();
-                expect(panel1.isVisible()).toBeFalse();
-                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0], {
-                    shiftKey: true
-                });
-                expect(panel2.isVisible()).toBeTrue();
+                // Shift+Escape should focus the panel, not collapse it
                 expect(panel1.isVisible()).toBeTrue();
-                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0], {
-                    shiftKey: true
-                });
-                expect(panel2.isVisible()).toBeTrue();
-                expect(panel1.isVisible()).toBeTrue();
-                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0]);
-                expect(panel1.isVisible()).toBeFalse();
-                expect(panel2.isVisible()).toBeTrue();
+                expect(focusCalled).toBeTrue();
+                delete panel1.focus;
             });
 
-            it("should show closed bottom panel only if it can be shown if shift-escape is pressed", async function () {
-                panel1.show(); panel2.show();
-                panel1.hide(); panel2.hide();
+            it("should shift-escape from panel focus the editor", async function () {
+                expect(MainViewManager.getActivePaneId()).toEqual("first-pane");
+                promise = MainViewManager._open(MainViewManager.FIRST_PANE, FileSystem.getFileForPath(testPath + "/test.js"));
+                await awaitsForDone(promise, "MainViewManager.doOpen");
+
+                panel1.show();
+                expect(panel1.isVisible()).toBeTrue();
+
+                // Blur the editor so getFocusedEditor() returns null
+                _$("#some-panel1")[0].setAttribute("tabindex", "-1");
+                _$("#some-panel1")[0].focus();
+                expect(EditorManager.getFocusedEditor()).toBeFalsy();
+
+                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown",
+                    _$("#editor-holder")[0], { shiftKey: true });
+                // Editor should regain focus
+                expect(EditorManager.getFocusedEditor()).toBeTruthy();
+            });
+
+            it("should shift-escape open default panel when no panel is visible", async function () {
+                panel1.hide();
+                panel2.hide();
+
+                expect(MainViewManager.getActivePaneId()).toEqual("first-pane");
+                promise = MainViewManager._open(MainViewManager.FIRST_PANE, FileSystem.getFileForPath(testPath + "/test.js"));
+                await awaitsForDone(promise, "MainViewManager.doOpen");
+
+                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0], {
+                    shiftKey: true
+                });
+                // A panel should now be visible (the default/quick access panel)
+                let defaultPanel = WorkspaceManager.getPanelForID(WorkspaceManager.DEFAULT_PANEL_ID);
+                expect(defaultPanel.isVisible()).toBeTrue();
+                defaultPanel.hide();
+            });
+
+            it("should shift-escape focus panel with custom focus handler", async function () {
+                // Create a panel with a text input that accepts focus
+                let focusPanelTemplate = `<div id="focus-test-panel" class="bottom-panel vert-resizable top-resizer">
+                    <input id="focus-test-input" type="text" />
+                </div>`;
+                let focusPanel = WorkspaceManager.createBottomPanel("focusTestPanel",
+                    _$(focusPanelTemplate), 100);
+
+                focusPanel.focus = function () {
+                    _$("#focus-test-input")[0].focus();
+                    return true;
+                };
+
+                focusPanel.show();
+                expect(focusPanel.isVisible()).toBeTrue();
+
+                expect(MainViewManager.getActivePaneId()).toEqual("first-pane");
+                promise = MainViewManager._open(MainViewManager.FIRST_PANE, FileSystem.getFileForPath(testPath + "/test.js"));
+                await awaitsForDone(promise, "MainViewManager.doOpen");
+
+                // Shift+Escape from editor should focus the panel's text input
+                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown",
+                    _$("#editor-holder")[0], { shiftKey: true });
+                expect(testWindow.document.activeElement).toBe(_$("#focus-test-input")[0]);
+
+                // Shift+Escape from panel should focus the editor
+                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown",
+                    _$("#editor-holder")[0], { shiftKey: true });
+                expect(EditorManager.getFocusedEditor()).toBeTruthy();
+                expect(testWindow.document.activeElement).not.toBe(_$("#focus-test-input")[0]);
+
+                focusPanel.hide();
+                WorkspaceManager.destroyBottomPanel("focusTestPanel");
+            });
+
+            it("should app-drawer-button toggle the default panel", async function () {
+                panel1.hide();
+                panel2.hide();
+                let defaultPanel = WorkspaceManager.getPanelForID(WorkspaceManager.DEFAULT_PANEL_ID);
+                if (defaultPanel.isVisible()) {
+                    defaultPanel.hide();
+                }
+                expect(defaultPanel.isVisible()).toBeFalse();
+
+                // Click app-drawer-button to show the default panel
+                _$("#app-drawer-button").click();
+                expect(defaultPanel.isVisible()).toBeTrue();
+
+                // Click again to hide it
+                _$("#app-drawer-button").click();
+                expect(defaultPanel.isVisible()).toBeFalse();
+            });
+
+            it("should escape collapse bottom panel regardless of canBeShown", async function () {
+                panel1.show();
                 panel2.registerCanBeShownHandler(function () {
                     return false;
                 });
@@ -1103,40 +1181,308 @@ define(function (require, exports, module) {
                 promise = MainViewManager._open(MainViewManager.FIRST_PANE, FileSystem.getFileForPath(testPath + "/test.js"));
                 await awaitsForDone(promise, "MainViewManager.doOpen");
 
-                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0], {
-                    shiftKey: true
-                });
-                expect(panel2.isVisible()).toBeFalse();
-                expect(panel1.isVisible()).toBeTrue();
-                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0], {
-                    shiftKey: true
-                });
-                expect(panel2.isVisible()).toBeFalse();
-                expect(panel1.isVisible()).toBeTrue();
+                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0]);
+                expect(panel1.isVisible()).toBeFalse();
                 panel2.registerCanBeShownHandler(null);
             });
+        });
 
-            it("should toggle closed bottom panel only if it can be shown if escape is pressed", async function () {
-                panel1.show(); panel2.show();
-                panel1.hide(); panel2.hide();
-                panel2.registerCanBeShownHandler(function () {
-                    return false;
+        describe("setPluginPanelWidth", function () {
+            let pluginPanel, $toolbarIcon;
+            const MIN_WIDTH = 200;
+
+            beforeAll(function () {
+                // Create a toolbar icon in #plugin-icons-bar
+                $toolbarIcon = _$('<a id="test-plugin-icon" href="#"></a>');
+                _$("#plugin-icons-bar").append($toolbarIcon);
+
+                let panelTemplate = '<div id="test-plugin-panel">Test Panel</div>';
+                pluginPanel = WorkspaceManager.createPluginPanel(
+                    "test-setwidth-panel", _$(panelTemplate), MIN_WIDTH, $toolbarIcon
+                );
+            });
+
+            afterAll(function () {
+                if (pluginPanel) {
+                    pluginPanel.hide();
+                }
+                $toolbarIcon.remove();
+            });
+
+            afterEach(function () {
+                pluginPanel.hide();
+            });
+
+            it("should be a no-op when no panel is visible", function () {
+                expect(pluginPanel.isVisible()).toBeFalse();
+                var toolbarWidthBefore = _$("#main-toolbar").width();
+                WorkspaceManager.setPluginPanelWidth(500);
+                var toolbarWidthAfter = _$("#main-toolbar").width();
+                expect(toolbarWidthAfter).toEqual(toolbarWidthBefore);
+            });
+
+            it("should resize the panel to the specified width", function () {
+                pluginPanel.show();
+                expect(pluginPanel.isVisible()).toBeTrue();
+
+                WorkspaceManager.setPluginPanelWidth(500);
+
+                var $mainToolbar = _$("#main-toolbar");
+                var $pluginIconsBar = _$("#plugin-icons-bar");
+                var panelContentWidth = $mainToolbar.width() - $pluginIconsBar.outerWidth();
+                expect(panelContentWidth).toEqual(500);
+            });
+
+            it("should clamp width to panel minWidth", function () {
+                pluginPanel.show();
+
+                // Request a width smaller than minWidth
+                WorkspaceManager.setPluginPanelWidth(50);
+
+                var $mainToolbar = _$("#main-toolbar");
+                var $pluginIconsBar = _$("#plugin-icons-bar");
+                var panelContentWidth = $mainToolbar.width() - $pluginIconsBar.outerWidth();
+                expect(panelContentWidth).toBeGreaterThanOrEqual(MIN_WIDTH);
+            });
+
+            it("should clamp width to max size (75% of window)", function () {
+                pluginPanel.show();
+
+                var maxContentWidth = (testWindow.innerWidth * 0.75) -
+                    _$("#plugin-icons-bar").outerWidth();
+
+                // Request a width larger than max
+                WorkspaceManager.setPluginPanelWidth(testWindow.innerWidth);
+
+                var $mainToolbar = _$("#main-toolbar");
+                var $pluginIconsBar = _$("#plugin-icons-bar");
+                var panelContentWidth = $mainToolbar.width() - $pluginIconsBar.outerWidth();
+                expect(panelContentWidth).toBeLessThanOrEqual(maxContentWidth + 1);
+            });
+
+            it("should update $windowContent right offset to match toolbar width", function () {
+                pluginPanel.show();
+
+                WorkspaceManager.setPluginPanelWidth(600);
+
+                var $mainToolbar = _$("#main-toolbar");
+                var $windowContent = _$(".content");
+                var toolbarWidth = $mainToolbar.width();
+                var rightOffset = parseInt($windowContent.css("right"), 10);
+                expect(rightOffset).toEqual(toolbarWidth);
+            });
+
+            it("should handle multiple successive resizes", function () {
+                pluginPanel.show();
+
+                var widths = [300, 500, 400, 700];
+                var $mainToolbar = _$("#main-toolbar");
+                var $pluginIconsBar = _$("#plugin-icons-bar");
+
+                widths.forEach(function (targetWidth) {
+                    WorkspaceManager.setPluginPanelWidth(targetWidth);
+                    var panelContentWidth = $mainToolbar.width() - $pluginIconsBar.outerWidth();
+                    expect(panelContentWidth).toEqual(targetWidth);
                 });
+            });
 
-                expect(MainViewManager.getActivePaneId()).toEqual("first-pane");
-                promise = MainViewManager._open(MainViewManager.FIRST_PANE, FileSystem.getFileForPath(testPath + "/test.js"));
-                await awaitsForDone(promise, "MainViewManager.doOpen");
+            it("should preserve at least 100px for the editor area", function () {
+                pluginPanel.show();
 
-                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0]);
-                expect(panel2.isVisible()).toBeFalse();
-                expect(panel1.isVisible()).toBeTrue();
-                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0]);
-                expect(panel2.isVisible()).toBeFalse();
-                expect(panel1.isVisible()).toBeFalse();
-                SpecRunnerUtils.simulateKeyEvent(KeyEvent.DOM_VK_ESCAPE, "keydown", _$("#editor-holder")[0]);
-                expect(panel2.isVisible()).toBeFalse();
-                expect(panel1.isVisible()).toBeTrue();
-                panel2.registerCanBeShownHandler(null);
+                // Request an absurdly large width that would squeeze the editor to near-zero
+                WorkspaceManager.setPluginPanelWidth(testWindow.innerWidth);
+
+                const $mainToolbar = _$("#main-toolbar");
+                const sidebarWidth = _$("#sidebar").outerWidth() || 0;
+                const toolbarWidth = $mainToolbar.width();
+                const editorWidth = testWindow.innerWidth - sidebarWidth - toolbarWidth;
+
+                // Editor area must retain at least 100px
+                expect(editorWidth).toBeGreaterThanOrEqual(100);
+            });
+
+            it("should set drag-based maxsize to preserve at least 100px for the editor", function () {
+                pluginPanel.show();
+
+                // Trigger a layout recompute so updateResizeLimits runs
+                WorkspaceManager.recomputeLayout(true);
+
+                const $mainToolbar = _$("#main-toolbar");
+                const sidebarWidth = _$("#sidebar").outerWidth() || 0;
+                const maxSize = $mainToolbar.data("maxsize");
+
+                // maxSize must leave at least 100px for the editor
+                const editorWidthAtMax = testWindow.innerWidth - sidebarWidth - maxSize;
+                expect(editorWidthAtMax).toBeGreaterThanOrEqual(100);
+
+                // maxSize should also not exceed 75% of window width
+                expect(maxSize).toBeLessThanOrEqual(testWindow.innerWidth * 0.75);
+            });
+        });
+
+        describe("Plugin panel clamping on window resize", function () {
+            let pluginPanel, $toolbarIcon;
+            const MIN_WIDTH = 200;
+
+            beforeAll(function () {
+                $toolbarIcon = _$('<a id="test-clamp-icon" href="#"></a>');
+                _$("#plugin-icons-bar").append($toolbarIcon);
+
+                let panelTemplate = '<div id="test-clamp-panel">Test Panel</div>';
+                pluginPanel = WorkspaceManager.createPluginPanel(
+                    "test-clamp-panel", _$(panelTemplate), MIN_WIDTH, $toolbarIcon
+                );
+            });
+
+            afterAll(function () {
+                if (pluginPanel) {
+                    pluginPanel.hide();
+                }
+                $toolbarIcon.remove();
+            });
+
+            afterEach(function () {
+                pluginPanel.hide();
+            });
+
+            it("should clamp plugin panel when window resizes smaller", function () {
+                pluginPanel.show();
+                WorkspaceManager.setPluginPanelWidth(600);
+
+                const $mainToolbar = _$("#main-toolbar");
+                const widthBefore = $mainToolbar.width();
+
+                // Simulate a narrow window resize
+                const sidebarWidth = _$("#sidebar").outerWidth() || 0;
+                const maxAllowed = Math.min(
+                    testWindow.innerWidth * 0.75,
+                    testWindow.innerWidth - sidebarWidth - 100
+                );
+
+                // Only expect clamping if the panel was wider than max
+                if (widthBefore > maxAllowed) {
+                    testWindow.dispatchEvent(new testWindow.Event("resize"));
+                    expect($mainToolbar.width()).toBeLessThanOrEqual(maxAllowed);
+                } else {
+                    // Panel fits, dispatch resize and verify it stays unchanged
+                    testWindow.dispatchEvent(new testWindow.Event("resize"));
+                    expect($mainToolbar.width()).toEqual(widthBefore);
+                }
+            });
+
+            it("should not let toolbar disappear on window resize", function () {
+                pluginPanel.show();
+
+                const $mainToolbar = _$("#main-toolbar");
+                const $pluginIconsBar = _$("#plugin-icons-bar");
+
+                testWindow.dispatchEvent(new testWindow.Event("resize"));
+
+                // Toolbar must remain at least as wide as the icons bar + panel minWidth
+                const minToolbarWidth = MIN_WIDTH + $pluginIconsBar.outerWidth();
+                expect($mainToolbar.width()).toBeGreaterThanOrEqual(minToolbarWidth);
+            });
+
+            it("should clamp panel width when shown after window was resized", function () {
+                // Panel is hidden; compute what the max toolbar width would be
+                const sidebarWidth = _$("#sidebar").outerWidth() || 0;
+                const maxToolbarWidth = Math.min(
+                    testWindow.innerWidth * 0.75,
+                    testWindow.innerWidth - sidebarWidth - 100
+                );
+
+                // Now show the panel — it should be clamped to maxToolbarWidth
+                pluginPanel.show();
+
+                const $mainToolbar = _$("#main-toolbar");
+                expect($mainToolbar.width()).toBeLessThanOrEqual(maxToolbarWidth);
+
+                // And content area should match
+                const $windowContent = _$(".content");
+                const rightOffset = parseInt($windowContent.css("right"), 10);
+                expect(rightOffset).toEqual($mainToolbar.width());
+            });
+
+            it("should keep content right offset in sync after resize clamp", function () {
+                pluginPanel.show();
+                WorkspaceManager.setPluginPanelWidth(600);
+
+                testWindow.dispatchEvent(new testWindow.Event("resize"));
+
+                const $mainToolbar = _$("#main-toolbar");
+                const $windowContent = _$(".content");
+                const rightOffset = parseInt($windowContent.css("right"), 10);
+                expect(rightOffset).toEqual($mainToolbar.width());
+            });
+        });
+
+        describe("Quick Access panel (app drawer button)", function () {
+            const DEFAULT_PANEL_ID = "workspace.defaultPanel";
+
+            function getDrawerButton() {
+                return _$("#app-drawer-button");
+            }
+
+            function isDefaultPanelVisible() {
+                return _$("#default-panel").is(":visible");
+            }
+
+            function isDrawerSelected() {
+                return getDrawerButton().hasClass("selected-button");
+            }
+
+            beforeEach(function () {
+                // Ensure a clean state: hide any open panels
+                const panel = WorkspaceManager.getPanelForID(DEFAULT_PANEL_ID);
+                if (panel && panel.isVisible()) {
+                    panel.hide();
+                }
+            });
+
+            it("should have the app-drawer button in the toolbar", function () {
+                expect(getDrawerButton().length).toBe(1);
+            });
+
+            it("should open Quick Access panel on drawer button click", function () {
+                expect(isDefaultPanelVisible()).toBeFalse();
+
+                getDrawerButton().click();
+
+                expect(isDefaultPanelVisible()).toBeTrue();
+            });
+
+            it("should show selected state when panel is open", function () {
+                expect(isDrawerSelected()).toBeFalse();
+
+                getDrawerButton().click();
+
+                expect(isDrawerSelected()).toBeTrue();
+            });
+
+            it("should close Quick Access panel on second click", function () {
+                getDrawerButton().click();
+                expect(isDefaultPanelVisible()).toBeTrue();
+                expect(isDrawerSelected()).toBeTrue();
+
+                getDrawerButton().click();
+
+                expect(isDefaultPanelVisible()).toBeFalse();
+                expect(isDrawerSelected()).toBeFalse();
+            });
+
+            it("should deselect drawer when another panel opens", async function () {
+                getDrawerButton().click();
+                expect(isDefaultPanelVisible()).toBeTrue();
+                expect(isDrawerSelected()).toBeTrue();
+
+                // Open a different panel (Problems)
+                await CommandManager.execute(Commands.VIEW_TOGGLE_PROBLEMS);
+
+                expect(isDefaultPanelVisible()).toBeFalse();
+                expect(isDrawerSelected()).toBeFalse();
+
+                // Clean up: close Problems panel
+                await CommandManager.execute(Commands.VIEW_TOGGLE_PROBLEMS);
             });
         });
     });

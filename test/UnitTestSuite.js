@@ -22,7 +22,7 @@
 define(function (require, exports, module) {
 
     require("spec/Phoenix-platform-test");
-    require("spec/Tauri-platform-test");
+    require("test/spec/Native-platform-test");
     require("spec/trust-ring-test");
     require("spec/utframework-suite-test");
     require("spec/Async-test");
@@ -92,8 +92,10 @@ define(function (require, exports, module) {
     require("spec/ExtensionUtils-integ-test");
     require("spec/InlineEditorProviders-integ-test");
     require("spec/PreferencesManager-integ-test");
+    require("spec/CentralControlBar-integ-test");
     require("spec/MainViewFactory-integ-test");
     require("spec/MainViewManager-integ-test");
+    require("spec/SidebarTabs-integ-test");
     require("spec/Keyboard-nav-integ-test");
     require("spec/Menu-integ-test");
     require("spec/ProjectManager-integ-test");
@@ -109,6 +111,10 @@ define(function (require, exports, module) {
     require("spec/Template-for-integ-test");
     require("spec/LiveDevelopmentMultiBrowser-test");
     require("spec/LiveDevelopmentCustomServer-test");
+    require("spec/md-editor-integ-test");
+    require("spec/md-editor-edit-integ-test");
+    require("spec/md-editor-edit-more-integ-test");
+    require("spec/md-editor-table-integ-test");
     require("spec/NewFileContentManager-test");
     require("spec/InstallExtensionDialog-integ-test");
     require("spec/ExtensionInstallation-test");
@@ -130,11 +136,14 @@ define(function (require, exports, module) {
     require("spec/Extn-CSSColorPreview-integ-test");
     require("spec/Extn-CollapseFolders-integ-test");
     require("spec/Extn-Tabbar-integ-test");
+    require("spec/Extn-CustomSnippets-test");
+    require("spec/Extn-CustomSnippets-integ-test");
     // extension integration tests
     require("spec/Extn-CSSCodeHints-integ-test");
     require("spec/Extn-HTMLCodeHints-Lint-integ-test");
     require("spec/Extn-HtmlTagSyncEdit-integ-test");
     require("spec/Extn-Git-integ-test");
+    require("spec/Terminal-integ-test");
     // Node Tests
     require("spec/NodeConnection-test");
     // pro test suite optional components

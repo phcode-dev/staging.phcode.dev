@@ -65,18 +65,38 @@ define(function (require, exports, module) {
         return '';
     }
 
+    function hasCliFlag(args, flagName, shortFlag) {
+        return args.some(arg =>
+            arg === `--${flagName}` ||
+            arg.startsWith(`--${flagName}=`) ||
+            (shortFlag && arg === `-${shortFlag}`)
+        );
+    }
+
     function quitIfNeeded(exitStatus) {
-        if(!window.__TAURI__){
+        const isTauri = !!window.__TAURI__;
+        const isElectron = !!window.electronAppAPI?.isElectron;
+
+        if (!isTauri && !isElectron) {
             return;
         }
+
         const WAIT_TIME_TO_COMPLETE_TEST_LOGGING_SEC = 10;
         console.log("Scheduled Quit in Seconds: ", WAIT_TIME_TO_COMPLETE_TEST_LOGGING_SEC);
-        setTimeout(()=>{
-            window.__TAURI__.cli.getMatches().then(matches=>{
-                if(matches && matches.args["quit-when-done"] && matches.args["quit-when-done"].occurrences) {
-                    window.__TAURI__.process.exit(exitStatus);
-                }
-            });
+        setTimeout(() => {
+            if (isTauri) {
+                window.__TAURI__.cli.getMatches().then(matches => {
+                    if (matches && matches.args["quit-when-done"] && matches.args["quit-when-done"].occurrences) {
+                        window.__TAURI__.process.exit(exitStatus);
+                    }
+                });
+            } else if (isElectron) {
+                window.electronAppAPI.getCliArgs().then(args => {
+                    if (hasCliFlag(args, 'quit-when-done', 'q')) {
+                        window.electronAppAPI.quitApp(exitStatus);
+                    }
+                });
+            }
         }, WAIT_TIME_TO_COMPLETE_TEST_LOGGING_SEC * 1000);
     }
 

@@ -1,13 +1,22 @@
 <div id="panel-live-preview">
-    <div id="live-preview-plugin-toolbar" class="plugin-toolbar" style="display: flex; align-items: center; flex-direction: row;">
-        <div style="width: 20%;display: flex;">
-            <button id="reloadLivePreviewButton" title="{{clickToReload}}" class="btn-alt-quiet toolbar-button reload-icon"></button>
-	        <button id="previewModeLivePreviewButton" title="{{clickToPreview}}" class="btn-alt-quiet toolbar-button">
-	            <i class="fa-solid fa-play"></i>
+    <div id="live-preview-plugin-toolbar" class="plugin-toolbar">
+        <div class="lp-toolbar-left">
+            <button id="reloadLivePreviewButton" title="{{clickToReload}}" class="btn-alt-quiet toolbar-button">
+	            <i class="fa-solid fa-arrow-rotate-right"></i>
 	        </button>
-            <button id="livePreviewModeBtn" title="{{livePreviewConfigureModes}}" class="btn-alt-quiet toolbar-button btn-dropdown btn"><!-- Content will come here dynamically --></button>
+	        <button id="designModeToggleLivePreviewButton" title="{{switchToDesignMode}}" class="btn-alt-quiet toolbar-button">
+	            <i class="fa-solid fa-expand"></i>
+	        </button>
+            <span id="lpModeBtnGroup" class="lp-mode-btn-group">
+                <button id="previewModeLivePreviewButton" title="{{clickToToggleEdit}}" class="btn-alt-quiet lp-mode-icon">
+                    <i class="fa-solid fa-pencil"></i>
+                </button>
+                <button id="livePreviewModeBtn" title="{{livePreviewConfigureModes}}" class="btn-alt-quiet lp-mode-dropdown-chevron">
+                    <i class="fa-solid fa-caret-down"></i>
+                </button>
+            </span>
         </div>
-        <div style="width: fit-content;min-width: 60%;display: flex;justify-content: center; align-items: center;">
+        <div class="lp-toolbar-centre">
 <!--            these are buttons that are always invisible to help central align the panel title-->
             <button id="safariButtonBallast" title="{{openInSafari}}" class="btn-alt-quiet toolbar-button live-preview-browser-btn forced-hidden">
                 <img src="thirdparty/devicon/icons/safari/safari-original.svg" />
@@ -38,7 +47,7 @@
                 <img src="thirdparty/devicon/icons/firefox/firefox-original.svg" />
             </button>
         </div>
-        <div style="width: 20%;display: flex;align-items: center; justify-content: flex-end">
+        <div class="lp-toolbar-right">
             <button id="livePreviewSettingsBtn" title="{{livePreviewSettings}}"
                     class="btn-alt-quiet toolbar-button lp-settings-icon"><i class="fa-solid fa-gear"></i></button>
         </div>
@@ -62,7 +71,7 @@
         <i class="fa fa-times live-preview-overlay-close" title="{{Strings.LIVE_PREVIEW_HIDE_OVERLAY}}"></i>
     </div>
     <div class="frame-container">
-        <div style="width: 3px;"></div>
+        <div style="width: 3px; flex-shrink: 0;"></div>
         <iframe id="panel-live-preview-frame" title="Live Preview" style="border: none"
                 width="100%" height="100%" seamless="true" srcdoc='<img width="50px" src="styles/images/Spinner-1s-200px.svg">'
                 sandbox="allow-same-origin allow-popups-to-escape-sandbox allow-popups allow-scripts allow-forms allow-modals allow-pointer-lock">

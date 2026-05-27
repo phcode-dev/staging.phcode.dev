@@ -49,7 +49,7 @@ define(function (require, exports, module) {
         mockExtensionList         = require("text!spec/ExtensionManager-test-files/mockExtensionList.json"),
         mockRegistry;
 
-    const testPath = window.__TAURI__ ?
+    const testPath = Phoenix.isNativeApp ?
         Phoenix.VFS.getTauriAssetServeDir() + "tests" :
         SpecRunnerUtils.getTempDirectory();
     const testSrc = SpecRunnerUtils.getTestPath("/spec/ExtensionManager-test-files");
@@ -806,6 +806,12 @@ define(function (require, exports, module) {
                         CommandManager.execute.apply(this, arguments);
                     }
                 });
+            });
+
+            afterEach(function () {
+                // Clean up any lingering dialogs
+                Dialogs.cancelModalDialogIfOpen("install-extension-dialog");
+                $(".modal-wrapper").remove();
             });
 
             it("should set flag to keep local files for new installs", async function () {

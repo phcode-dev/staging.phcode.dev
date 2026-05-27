@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test electron apis accessible</title>
+    <script>
+        async function init() {
+            if (window.electronAPI) {
+                // Signal to all windows that we're ready (mirrors Tauri's event.emit)
+                await window.electronAPI.emitToAllWindows('PLATFORM_API_WORKING', 'ready');
+            }
+        }
+
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</head>
+<body>
+sending event with electron api...
+</body>
+</html>
