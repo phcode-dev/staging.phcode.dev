@@ -115,7 +115,27 @@ define(function (require, exports, module) {
             EditorManager       = testWindow.brackets.test.EditorManager;
 
             await SpecRunnerUtils.loadProjectInTestWindow(testPath);
-        }, 30000);
+
+            if (testWindow.Phoenix.isNativeApp) {
+                // Warm up the TypeScript language server here, where the one-time cold start (spawn
+                // vtsls + tsserver loading the TypeScript library and project) belongs - so the
+                // jump-to-definition spec below only needs a short wait for its own request instead
+                // of budgeting for a cold server (its very first request could otherwise pend longer
+                // than any reasonable spec timeout on slow/loaded CI runners).
+                await awaitsForDone(
+                    CommandManager.execute(Commands.CMD_ADD_TO_WORKINGSET_AND_OPEN,
+                        {fullPath: testPath + "/test.js"}),
+                    "warm-up: open test.js");
+                const LSPClient = await new Promise(function (resolve) {
+                    testWindow.brackets.getModule(["languageTools/LSPClient"], resolve);
+                });
+                await awaitsFor(function () {
+                    return LSPClient.isLintingProviderActive("javascript");
+                }, "the TypeScript language server to finish its cold start", 90000);
+                await awaitsForDone(CommandManager.execute(Commands.FILE_CLOSE_ALL, { _forceClose: true }),
+                    "close warm-up file");
+            }
+        }, 120000);
 
         afterAll(async function () {
             await closeTestWindow();
@@ -191,23 +211,76 @@ define(function (require, exports, module) {
 
         describe("Editor Navigation Commands", function () {
             it("should jump to definition", async function () {
-                var promise,
-                    selection;
-                promise = CommandManager.execute(Commands.CMD_ADD_TO_WORKINGSET_AND_OPEN, {fullPath: testPath + "/test.js"});
-                await awaitsForDone(promise, "Open into working set");
-
+                var selection;
+                await awaitsForDone(
+                    CommandManager.execute(Commands.CMD_ADD_TO_WORKINGSET_AND_OPEN, {fullPath: testPath + "/test.js"}),
+                    "Open into working set");
                 myEditor = EditorManager.getCurrentFullEditor();
-                myEditor.setCursorPos({line: 5, ch: 8});
-                await awaits(1500); // for the code intelligence framework to prime up
-                promise = CommandManager.execute(Commands.NAVIGATE_JUMPTO_DEFINITION);
-                await awaitsForDone(promise, "Jump To Definition");
 
-                selection = myEditor.getSelection();
-                expect(fixSel(selection)).toEql(fixSel({
-                    start: {line: 0, ch: 9},
-                    end: {line: 0, ch: 15}
-                }));
-            });
+                // one jump attempt capped at 3s, so a hung request just counts
+                // as a failed attempt and the caller can retry
+                function attemptJumpToDefinition() {
+                    return new Promise(function (resolve) {
+                        let settled = false;
+                        function settle(val) {
+                            if (!settled) {
+                                settled = true;
+                                resolve(val);
+                            }
+                        }
+                        CommandManager.execute(Commands.NAVIGATE_JUMPTO_DEFINITION)
+                            .done(function () { settle(true); })
+                            .fail(function () { settle(false); });
+                        setTimeout(function () { settle(false); }, 3000);
+                    });
+                }
+
+                if (window.Phoenix.isNativeApp) {
+                    // Desktop has the LSP server (vtsls), which provides jump-to-definition for
+                    // JavaScript at a higher priority than the built-in Tern provider. vtsls returns
+                    // testMe's full declaration range and we jump to its start (the `function`
+                    // keyword), giving a collapsed cursor at {0,0} - whereas Tern selects the
+                    // identifier name. The server was already warmed up in beforeAll, so 15s is
+                    // plenty here. Each attempt is time-boxed: a slow or unanswered request counts
+                    // as a retry instead of pinning the whole wait (awaitsFor races each pollFn
+                    // invocation against the FULL timeout, so one hung attempt would otherwise eat
+                    // the entire budget), and a rejected jump ("no definition yet") also retries -
+                    // awaitsFor aborts outright on a pollFn exception, so the promise is absorbed.
+                    await awaitsFor(async function () {
+                        myEditor.setCursorPos({line: 5, ch: 8});
+                        const landed = await attemptJumpToDefinition();
+                        if (!landed) {
+                            return false;
+                        }
+                        const sel = myEditor.getSelection();
+                        return sel.start.line === 0 && sel.start.ch === 0 &&
+                            sel.end.line === 0 && sel.end.ch === 0;
+                    }, "LSP jump-to-definition to land on the testMe declaration", 15000, 500);
+                    selection = myEditor.getSelection();
+                    expect(fixSel(selection)).toEql(fixSel({
+                        start: {line: 0, ch: 0},
+                        end: {line: 0, ch: 0}
+                    }));
+                } else {
+                    // Tern can stall on a slow CI runner while it warms up, so
+                    // retry with capped attempts, same as the LSP path above
+                    await awaitsFor(async function () {
+                        myEditor.setCursorPos({line: 5, ch: 8});
+                        const landed = await attemptJumpToDefinition();
+                        if (!landed) {
+                            return false;
+                        }
+                        const sel = myEditor.getSelection();
+                        return sel.start.line === 0 && sel.start.ch === 9 &&
+                            sel.end.line === 0 && sel.end.ch === 15;
+                    }, "Tern jump-to-definition to select the testMe identifier", 30000, 500);
+                    selection = myEditor.getSelection();
+                    expect(fixSel(selection)).toEql(fixSel({
+                        start: {line: 0, ch: 9},
+                        end: {line: 0, ch: 15}
+                    }));
+                }
+            }, 35000);
         });
 
         if(window.Phoenix.isNativeApp) {

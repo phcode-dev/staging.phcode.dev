@@ -1,4 +1,5 @@
 @import "../../../../styles/brackets_core_ui_variables.less";
+@import (reference) "../../../../styles/brackets_variables.less";
 
 // common
 @git-moreDarkGrey:               #868888;
@@ -450,6 +451,16 @@
         &:last-child { // commit hash
             width: 50px;
         }
+    }
+    tbody tr.history-empty-message td {
+        width: auto;
+        padding: 15px;
+        white-space: normal;
+        text-align: left;
+        background: none;
+        color: inherit;
+        border: none;
+        cursor: default;
     }
 }
 
@@ -930,6 +941,7 @@
     margin-left: -12px;
     position: absolute;
     display: block;
+    min-width: 200px;
     max-width: none;
     z-index: 100;
     overflow-y: auto;
@@ -950,6 +962,7 @@
     }
     .git-branch-link {
         position: relative;
+        padding-right: 62px;
         .switch-branch {
             display: inline-block;
             width: 100%;
@@ -959,30 +972,39 @@
         .trash-icon, .merge-branch {
             position: absolute;
             opacity: 0;
-            top: 27%;
+            top: 50%;
+            transform: translateY(-50%);
             background-image: none !important;
-            width: 16px;
-            height: 16px;
-            font-size: 20px;
-            color: rgba(0, 0, 0, 0.5);
-            line-height: 15px;
+            width: 20px;
+            height: 20px;
+            font-size: 13px;
+            color: fade(@bc-menu-text, 55%);
+            line-height: 20px;
             text-align: center;
+            .dark & {
+                color: fade(@dark-bc-menu-text, 55%);
+            }
             &:hover {
-                color: rgba(0, 0, 0, 1);
+                color: @bc-menu-text;
+                .dark & {
+                    color: @dark-bc-menu-text;
+                }
             }
         }
-        .trash-icon, .merge-branch {
-            &:hover {
-                color: rgba(0, 0, 0, 1);
-            }
-        }
-        &:hover {
+        &:hover, &.selected {
             .trash-icon, .merge-branch {
                 opacity: 1;
             }
         }
         .merge-branch {
-            right: 5px;
+            right: 34px;
+            .octicon {
+                font-size: 15px;
+            }
+        }
+        .trash-icon {
+            left: auto;
+            right: 8px;
         }
     }
     a {
@@ -1088,6 +1110,29 @@
         right: 32px;
         top: 5px;
     }
+    .git-panel-branch {
+        display: inline-block;
+        vertical-align: middle;
+        box-sizing: border-box;
+        height: 22px;
+        margin-top: 2px;
+        margin-right: 4px;
+        padding: 2px 10px;
+        font-size: 12px;
+        line-height: 16px;
+        white-space: nowrap;
+        cursor: default;
+        i {
+            margin-right: 4px;
+            font-size: 10px;
+        }
+        &:not(.clickable) {
+            opacity: .5;
+        }
+        &.clickable {
+            cursor: pointer;
+        }
+    }
     .octicon:not(:only-child) {
         margin-right: 5px;
         vertical-align: -1px;
@@ -1103,21 +1148,42 @@
             color: @dark-bc-text;
         }
     }
+    .mainToolbar:has(.btn-group.open) {
+        z-index: (@z-index-brackets-panel-resizer + 1);
+    }
     .git-remotes {
         border-radius: 4px 0 0 4px;
-        padding-bottom: 5px;
+        display: inline-flex;
+        align-items: center;
+        &:focus {
+            border: 1px solid @bc-btn-border;
+            box-shadow: inset 0 1px @bc-highlight-hard;
+
+            .dark & {
+                border: 1px solid @dark-bc-btn-border;
+                box-shadow: inset 0 1px @dark-bc-highlight;
+            }
+        }
         .caret {
             border-bottom-color: @bc-text;
-            margin: 7px 5px auto 0px;
+            margin: 0 5px 0 0;
 
             .dark & {
                 border-bottom-color: @dark-bc-text;
             }
         }
+        .git-selected-remote {
+            position: relative;
+            top: -1px;
+        }
     }
     .git-remotes-dropdown {
         // don't mess with this, the dropdown menu is at the top so it should grow from bottom left to top right.
         -webkit-transform-origin: 0 100%;
+        font-size: 14px;
+        .divider {
+            margin: 5px 1px;
+        }
     }
     .git-remotes-dropdown a {
         .change-remote {
@@ -1139,9 +1205,6 @@
         }
         &:hover .hover-icon {
             opacity: 1;
-        }
-        &[class$="-remote-new"] {
-            font-style: italic;
         }
     }
 

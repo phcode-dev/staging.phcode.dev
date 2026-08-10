@@ -4,6 +4,51 @@ We are continuously adding features every week. [Check out our release page to s
 
 Here's a list of top features recently added to Phoenix Code:
 
+## [Style Your Page Visually with the Styles Bar](https://docs.phcode.dev/app-links/styles-bar)
+
+`Added in August 2026`
+
+The new Styles Bar in Live Preview lets you style any element on your page visually - change fonts, colors, backgrounds, borders, spacing, alignment, and layout directly in your page instantly.
+
+Browse and search Google Fonts or system fonts. Starting from scratch? A blank page now shows a starter bar so you can add your first element right from the preview.
+
+![Image](https://docs-images.phcode.dev/in-app/pro-stylesBar.png)
+
+## [Code Intelligence for JavaScript, TypeScript, JSON, Python, and PHP](https://docs.phcode.dev/app-links/code-intelligence)
+
+`Added in August 2026`
+
+Phoenix Code now ships IDE-grade code intelligence for:
+
+-   **JavaScript & TypeScript** - completions, go to definition, find usages, and error checking, with automatically managed project configuration.
+-   **JSON and Npm smarts** - Package JSON and other known JSON formats code intelligence. npm package name and version suggestions as you type, dependency info on hover, and warnings for packages with known vulnerabilities.
+-   **Python** - code intelligence with built-in code formatting.
+-   **PHP** - full code intelligence, installed on demand when you open a PHP file.
+
+Language servers are downloaded and set up automatically in the background - no manual installation needed. Documentation is now shown with code hints and hovering code shows quick actions to jump to a definition or find usages.
+
+> This feature is available only in desktop apps.
+
+![Image](https://docs-images.phcode.dev/in-app/codeIntelligence.png)
+
+## [Choose Your AI Model/Disable AI](https://docs.phcode.dev/app-links/ai-models)
+
+`Added in August 2026`
+
+Pick which Claude model powers your AI chat, right from the chat panel. AI can now be enabled or disabled anytime from the AI settings dialog.
+
+> This feature is available only in desktop apps.
+
+![Image](https://docs-images.phcode.dev/in-app/pro-aiModels.png)
+
+## [Video and Audio Preview](https://docs.phcode.dev/app-links/video-audio-preview)
+
+`Added in August 2026`
+
+Click a video or audio file in your project to play it right inside the editor, just like image preview.
+
+![Image](https://docs-images.phcode.dev/in-app/videoAudioPreview.jpg)
+
 ## [Try ideas, build pages, and fix issues with AI](https://docs.phcode.dev/app-links/ai-chat)
 
 `Added in April 2026`

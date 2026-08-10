@@ -27,7 +27,7 @@ define(function (require, exports, module) {
         return;
     }
 
-    let $, __PR, testWindow, ExtensionLoader, Menus, Commands, CommandManager, EditorManager,
+    let $, __PR, testWindow, ExtensionLoader, Menus, Commands, CommandManager, EditorManager, MainViewManager,
         SpecRunnerUtils     = require("spec/SpecRunnerUtils"),
         nonGitReadOnlyTestFolder = SpecRunnerUtils.getTestPath("/spec/LowLevelFileIO-test-files");
 
@@ -61,6 +61,7 @@ define(function (require, exports, module) {
             Commands = testWindow.brackets.test.Commands;
             CommandManager = testWindow.brackets.test.CommandManager;
             EditorManager = testWindow.brackets.test.EditorManager;
+            MainViewManager = testWindow.brackets.test.MainViewManager;
             testPathGit = await SpecRunnerUtils.getTempTestDirectory("/spec/EditorCommandHandlers-test-files");
 
             await SpecRunnerUtils.loadProjectInTestWindow(testPathGit);
@@ -475,6 +476,7 @@ define(function (require, exports, module) {
             });
 
             const createdBranch = "createdBranch";
+            let defaultBranch;
             async function waitForBranchNameDropdown(expectedName) {
                 await awaitsFor(()=>{
                     return $("#git-branch").text().trim().includes(expectedName);
@@ -482,6 +484,8 @@ define(function (require, exports, module) {
             }
 
             it("should be able to create a new branch", async () => {
+                defaultBranch = await testWindow.phoenixGitEvents.Git.getCurrentBranchName();
+                expect(defaultBranch).toBeTruthy();
                 $("#git-branch-dropdown-toggle").click();
                 await awaitsFor(()=>{
                     return $(".git-branch-new").is(":visible");
@@ -500,10 +504,191 @@ define(function (require, exports, module) {
                     return $(".git-branch-new").is(":visible");
                 }, "branch dropdown to show");
 
-                expect($(".switch-branch").text()).toContain("master");
+                expect($(".switch-branch").text()).toContain(defaultBranch);
                 $(".switch-branch").click();
-                await waitForBranchNameDropdown("master");
+                await waitForBranchNameDropdown(defaultBranch);
             });
+
+            function panelBranchName() {
+                return $gitPanel.find(".git-panel-branch .git-branch-name").text().trim();
+            }
+
+            async function waitForBranchDropdownOpen(open) {
+                await awaitsFor(()=>{
+                    return $("#git-branch-dropdown").length === (open ? 1 : 0);
+                }, `branch dropdown to be ${open ? "open" : "closed"}`);
+            }
+
+            async function switchToBranch(branchName) {
+                $("#git-branch-dropdown-toggle").click();
+                await waitForBranchDropdownOpen(true);
+
+                const $branchLink = $(".switch-branch").filter((index, el) => $(el).text().trim() === branchName);
+                expect($branchLink.length).toBe(1);
+                $branchLink.click();
+                await waitForBranchNameDropdown(branchName);
+            }
+
+            it("should git panel branch button show the current branch and follow switches", async () => {
+                await showGitPanel();
+                await waitForBranchNameDropdown(defaultBranch);
+                await awaitsFor(()=>{
+                    return panelBranchName() === defaultBranch;
+                }, "panel branch button to show the current branch");
+
+                // the panel button mirrors the sidebar indicator and is clickable in a repo
+                expect($("#git-branch").text().trim()).toContain(panelBranchName());
+                expect($gitPanel.find(".git-panel-branch").attr("title")).toContain(defaultBranch);
+                expect($gitPanel.find(".git-panel-branch").hasClass("clickable")).toBeTrue();
+
+                await switchToBranch(createdBranch);
+                await awaitsFor(()=>{
+                    return panelBranchName() === createdBranch;
+                }, "panel branch button to follow the branch switch");
+
+                // switch back so the rest of the specs run on the default branch
+                await switchToBranch(defaultBranch);
+                await awaitsFor(()=>{
+                    return panelBranchName() === defaultBranch;
+                }, "panel branch button to follow the switch back");
+            });
+
+            it("should git panel branch button open the dropdown and move it between anchors", async () => {
+                await showGitPanel();
+                await waitForBranchDropdownOpen(false);
+
+                // the dropdown opens above the panel button. _positionDropdownAbove is the
+                // only path that neutralizes the sidebar margin, so the inline margin-left
+                // tells us which anchor the dropdown is currently attached to
+                $gitPanel.find(".git-panel-branch").click();
+                await waitForBranchDropdownOpen(true);
+                expect($("#git-branch-dropdown")[0].style.marginLeft).toBe("0px");
+
+                // clicking the same anchor closes it
+                $gitPanel.find(".git-panel-branch").click();
+                await waitForBranchDropdownOpen(false);
+
+                // clicking the other anchor moves the dropdown there instead of closing it
+                $gitPanel.find(".git-panel-branch").click();
+                await waitForBranchDropdownOpen(true);
+                $("#git-branch-dropdown-toggle").click();
+                await waitForBranchDropdownOpen(true);
+                expect($("#git-branch-dropdown")[0].style.marginLeft).toBe("");
+
+                $("#git-branch-dropdown-toggle").click();
+                await waitForBranchDropdownOpen(false);
+            });
+
+            function workingSetHas(fileName) {
+                const workingSet = MainViewManager.getWorkingSet(MainViewManager.ALL_PANES);
+                return workingSet.some((file) => file.fullPath.endsWith("/" + fileName));
+            }
+
+            function viewedFileIs(fileName) {
+                const viewedPath = MainViewManager.getCurrentlyViewedPath(MainViewManager.ACTIVE_PANE);
+                return !!viewedPath && viewedPath.endsWith("/" + fileName);
+            }
+
+            async function makeFilesChanged(fileNames) {
+                await showGitPanel();
+                await __PR.closeAll();
+                await awaitsFor(()=>{
+                    return MainViewManager.getWorkingSetSize(MainViewManager.ALL_PANES) === 0;
+                }, "working set to be empty");
+
+                for (const fileName of fileNames) {
+                    await __PR.writeTextFile(fileName, `/* changed ${fileName} */\n`, true);
+                }
+                await __PR.execCommand(Commands.CMD_GIT_REFRESH);
+                await awaitsFor(()=>{
+                    return $gitPanel.find(".modified-file").length === fileNames.length;
+                }, `${fileNames.length} files to be in modified files list`, 10000);
+            }
+
+            it("should open all changed files add them to the working set", async () => {
+                await makeFilesChanged(["test.css", "test.js"]);
+
+                await __PR.execCommand(Commands.CMD_GIT_OPEN_CHANGED_FILES);
+                await awaitsFor(()=>{
+                    return workingSetHas("test.css") && workingSetHas("test.js");
+                }, "changed files to be added to the working set", 10000);
+
+                // only the changed files are opened, test.html was left untouched
+                expect(MainViewManager.getWorkingSetSize(MainViewManager.ALL_PANES)).toBe(2);
+                expect(workingSetHas("test.html")).toBeFalse();
+
+                // nothing was open, so one of the changed files is brought into view
+                await awaitsFor(()=>{
+                    return viewedFileIs("test.css") || viewedFileIs("test.js");
+                }, "a changed file to be viewed", 10000);
+            });
+
+            it("should not switch the viewed file when opening all changed files", async () => {
+                await makeFilesChanged(["test.css", "test.js"]);
+
+                // test.html has no changes, so it must stay in view after the command
+                await __PR.openFile("test.html");
+                await awaitsFor(()=>{
+                    return viewedFileIs("test.html");
+                }, "test.html to be the viewed file");
+
+                await __PR.execCommand(Commands.CMD_GIT_OPEN_CHANGED_FILES);
+                await awaitsFor(()=>{
+                    return workingSetHas("test.css") && workingSetHas("test.js");
+                }, "changed files to be added to the working set", 10000);
+
+                // a git refresh round trip gives any stray file open enough time to land
+                await __PR.execCommand(Commands.CMD_GIT_REFRESH);
+                expect(viewedFileIs("test.html")).toBeTrue();
+                expect(MainViewManager.getWorkingSetSize(MainViewManager.ALL_PANES)).toBe(3);
+            });
+
+            // one more than the threshold the panel starts confirming at
+            const BULK_FILE_COUNT = 51;
+
+            it("should confirm before opening a large number of changed files", async () => {
+                await showGitPanel();
+                await __PR.closeAll();
+                await awaitsFor(()=>{
+                    return MainViewManager.getWorkingSetSize(MainViewManager.ALL_PANES) === 0;
+                }, "working set to be empty");
+
+                for (let i = 0; i < BULK_FILE_COUNT; i++) {
+                    await __PR.writeTextFile(`bulkFile${i}.txt`, `bulk file ${i}\n`, true);
+                }
+                await __PR.execCommand(Commands.CMD_GIT_REFRESH);
+                await awaitsFor(()=>{
+                    return $gitPanel.find(".modified-file").length >= BULK_FILE_COUNT;
+                }, "bulk files to be in modified files list", 30000);
+
+                // nothing is deleted and untracked files are shown, so every row in the
+                // panel is a file the command will open
+                const changedFileCount = $gitPanel.find(".modified-file").length;
+
+                // cancelling the confirmation must not open anything
+                __PR.execCommand(Commands.CMD_GIT_OPEN_CHANGED_FILES); // dont await here as
+                // it only completes after the dialog is closed
+                await __PR.waitForModalDialog("#git-question-dialog", null, 10000);
+                __PR.clickDialogButtonID(__PR.Dialogs.DIALOG_BTN_CANCEL);
+                await __PR.waitForModalDialogClosed("#git-question-dialog");
+                await __PR.execCommand(Commands.CMD_GIT_REFRESH);
+                expect(MainViewManager.getWorkingSetSize(MainViewManager.ALL_PANES)).toBe(0);
+
+                // confirming opens all of them
+                __PR.execCommand(Commands.CMD_GIT_OPEN_CHANGED_FILES);
+                await __PR.waitForModalDialog("#git-question-dialog", null, 10000);
+                __PR.clickDialogButtonID(__PR.Dialogs.DIALOG_BTN_OK);
+                await __PR.waitForModalDialogClosed("#git-question-dialog");
+                await awaitsFor(()=>{
+                    return MainViewManager.getWorkingSetSize(MainViewManager.ALL_PANES) === changedFileCount;
+                }, "all changed files to be opened", 30000);
+
+                // re-running it now asks nothing as the files are already open. awaiting
+                // here is safe for that reason, a dialog coming up would time out the spec
+                await __PR.execCommand(Commands.CMD_GIT_OPEN_CHANGED_FILES);
+                expect($("#git-question-dialog").length).toBe(0);
+                expect(MainViewManager.getWorkingSetSize(MainViewManager.ALL_PANES)).toBe(changedFileCount);
+            }, 60000);
         });
     });
 });

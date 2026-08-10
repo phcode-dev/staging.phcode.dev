@@ -34,8 +34,13 @@ window.AppConfig = {
         "app_notification_url": "https://updates.phcode.io/appNotifications/staging/",
         "app_update_url": "https://updates.phcode.io/tauri/update-latest-pre-release.json",
         "extensionTakedownURL": "https://updates.phcode.io/extension_takedown.json",
+        "lsp_server_pins": {
+            "intelephense": "1.18.5",
+            "pyrefly": "1.1.1",
+            "ruff": "0.15.20"
+        },
         "linting.enabled_by_default": true,
-        "build_timestamp": "2026-05-27T14:43:51.903Z",
+        "build_timestamp": "2026-08-10T16:23:28.867Z",
         "googleAnalyticsID": "G-FP5S9BKDSJ",
         "googleAnalyticsIDDesktop": "G-D5R1Y6PTS8",
         "mixPanelID": "a7e08ffd43c37767c29b13df1d2e6c62",
@@ -47,8 +52,8 @@ window.AppConfig = {
         "bugsnagEnv": "staging"
     },
     "name": "Phoenix Code",
-    "version": "5.1.22-23013",
-    "apiVersion": "5.1.22",
+    "version": "5.2.5-23289",
+    "apiVersion": "5.2.5",
     "homepage": "https://core.ai",
     "issues": {
         "url": "https://github.com/phcode-dev/phoenix/issues"

@@ -147,17 +147,31 @@ define(function (require, exports, module) {
             await _waitForProblemsPanelVisible(true);
         }
 
-        it("should show JSHint in desktop app if ESLint load failed for project", async function () {
+        // Wait until the TypeScript language server is the active JS linter. On desktop JSHint defers
+        // to it, so assertions about JSHint being absent are only meaningful once it's up.
+        async function _waitForLSPLintingJS() {
+            const LSPClient = await new Promise(function (resolve) {
+                testWindow.brackets.getModule(["languageTools/LSPClient"], resolve);
+            });
+            await awaitsFor(function () {
+                return LSPClient.isLintingProviderActive("javascript");
+            }, "the language server to be linting JavaScript", 30000);
+        }
+
+        it("should defer JSHint to the LSP even when ESLint load failed (desktop)", async function () {
             await SpecRunnerUtils.parkProject();
             await _openSimpleES6Project();
+            // ESLint can't load (no node_modules) -> it surfaces the npm-install message...
             await awaitsFor(async ()=>{
                 await _fileSwitcherroForESLintFailDetection();
                 return $("#problems-panel").text().includes(Strings.DESCRIPTION_ESLINT_DO_NPM_INSTALL);
             }, "ESLint error to be shown", 3000, 300);
-            await awaitsFor(()=>{
-                return $("#problems-panel").text().includes(JSHintErrorES6Error_js);
-            }, "JShint error to be shown");
-        }, 5000);
+            // ...but JSHint does NOT step in: on desktop the language server is the JS linter, so
+            // JSHint defers to it instead of being the ESLint-failure fallback.
+            await _waitForLSPLintingJS();
+            await awaits(100); // give JSHint time to run if it were going to
+            expect($("#problems-panel").text().includes("JSHint")).toBeFalse();
+        }, 40000);
 
         describe("ES6 project", function () {
             let es6ProjectPath;
@@ -180,13 +194,15 @@ define(function (require, exports, module) {
                 await _loadAndValidateES6Project();
             }, 30000);
 
-            it("should show ESLint and JSHint in desktop app for es6 project or below", async function () {
+            it("should show ESLint failure but defer JSHint to the LSP (es6 project, desktop)", async function () {
                 await _loadAndValidateES6Project();
-                await awaitsFor(async ()=>{
-                    await _fileSwitcherroForESLintFailDetection();
-                    return $("#problems-panel").text().includes(JSHintErrorES6Error_js);
-                }, "JShint error to be shown", 3000, 300);
-            }, 30000);
+                // ESLint v6 is unsupported, so ESLint surfaces its "load failed" message - but JSHint
+                // defers to the language server (the JS linter on desktop) rather than stepping in.
+                await _fileSwitcherroForESLintFailDetection();
+                await _waitForLSPLintingJS();
+                await awaits(100);
+                expect($("#problems-panel").text().includes("JSHint")).toBeFalse();
+            }, 40000);
         });
 
         describe("ES7 and JSHint project", function () {
@@ -264,8 +280,20 @@ define(function (require, exports, module) {
             it("should not lint jsx file as ESLint v8 is not configured for react lint", async function () {
                 await _openProjectFile("react.jsx");
                 await awaits(100); // Just wait for some time to prevent any false linter runs
-                await _waitForProblemsPanelVisible(false);
-                expect($("#status-inspection").hasClass("inspection-disabled")).toBeTrue();
+                if (window.Phoenix.isNativeApp) {
+                    // On desktop the LSP server (vtsls) provides JavaScript/JSX diagnostics, so a .jsx
+                    // file IS linted by the LSP even though ESLint v8 is not configured for react -
+                    // the inspector is active (not disabled). ESLint itself still contributes nothing.
+                    await awaitsFor(()=>{
+                        return !$("#status-inspection").hasClass("inspection-disabled");
+                    }, "jsx inspection to be active via the LSP", 15000);
+                    expect($("#status-inspection").hasClass("inspection-disabled")).toBeFalse();
+                } else {
+                    // In the browser build there is no LSP, and ESLint v8 declines jsx, so nothing
+                    // lints the file - the inspector is disabled.
+                    await _waitForProblemsPanelVisible(false);
+                    expect($("#status-inspection").hasClass("inspection-disabled")).toBeTrue();
+                }
             }, 30000);
 
             it("should not show JSHint in desktop app if ESLint is active", async function () {
@@ -424,13 +452,27 @@ define(function (require, exports, module) {
 
             it("should be able to fix all errors", async function () {
                 await _openAndVerifyInitial();
-                const editor = EditorManager.getCurrentFullEditor();
+                let editor = EditorManager.getCurrentFullEditor();
                 editor.setCursorPos(0, 0); // resent any saved selections from previous run
                 // click on fix : Expected indentation of 4 spaces but found 9. ESLint (indent)
+                // a late doc reload can stale the fixes and pop the "Failed to Apply Fix" dialog
+                // on slow CI; dismiss it, re-lint and retry so it doesn't leak into later suites
                 $($("#problems-panel").find(".problems-fix-all-btn")).click();
-                await awaitsFor(()=>{
+                await awaitsFor(async ()=>{
+                    if($(".error-dialog.instance").length){
+                        testWindow.brackets.test.Dialogs.cancelModalDialogIfOpen(
+                            testWindow.brackets.test.DefaultDialogs.DIALOG_ID_ERROR);
+                        await _triggerLint();
+                        await awaitsFor(()=>{
+                            return $("#problems-panel").find(".ph-fix-problem").length === 2;
+                        }, "fix buttons to reappear after re-lint", 15000);
+                        editor = EditorManager.getCurrentFullEditor();
+                        editor.setCursorPos(0, 0);
+                        $($("#problems-panel").find(".problems-fix-all-btn")).click();
+                        return false;
+                    }
                     return $("#problems-panel").find(".ph-fix-problem").length === 0;
-                }, "no problems should remain as all is now fixed", 15000);
+                }, "no problems should remain as all is now fixed", 30000);
 
                 // fixing multiple should place the cursor on first fix
                 expect(editor.hasSelection()).toBeFalse();
@@ -444,7 +486,7 @@ define(function (require, exports, module) {
                 await awaitsFor(()=>{
                     return $("#problems-panel").find(".ph-fix-problem").length === 2;
                 }, "2 problem should be there", 15000);
-            }, 30000);
+            }, 60000);
         });
     });
 });

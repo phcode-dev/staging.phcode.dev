@@ -26,7 +26,8 @@ function RemoteFunctions(config = {}) {
     const SHARED_STATE = {
         __description: "Use this to keep shared state for Live Preview Edit instead of window.*",
         _suppressDOMEditDismissal: false,
-        _suppressDOMEditDismissalTimeout: null
+        _suppressDOMEditDismissalTimeout: null,
+        _boxModelHighlightHidden: false
     };
 
     let _hoverHighlight;
@@ -72,6 +73,9 @@ function RemoteFunctions(config = {}) {
         // called when an item is selected from the more options dropdown
         "handleDropdownClick",
         "updateContent", // in-place content refresh for control box etc. after drag
+        // a DOM edit changed the selected element's attributes or rebuilt its node —
+        // refresh shown UI in place; must never resurrect dismissed UI
+        "onSelectedElementMutated",
         "reRegisterEventHandlers",
         "handleClick", // handle click on an icon in the tool box.
         // when escape key is presses in the editor, we may need to dismiss the live edit boxes.
@@ -187,7 +191,10 @@ function RemoteFunctions(config = {}) {
         disableHoverListeners: disableHoverListeners,
         enableHoverListeners: enableHoverListeners,
         redrawHighlights: redrawHighlights,
-        redrawEverything: redrawEverything
+        redrawEverything: redrawEverything,
+        getTreePath: _getTreePath,
+        getElementByTreePath: _getElementByTreePath,
+        getSourceChildren: _instrumentedChildren
     };
 
     /**
@@ -443,15 +450,17 @@ function RemoteFunctions(config = {}) {
             s.backgroundColor = color;
         }
 
-        // Padding region
-        const padColor = COLORS.highlightPadding;
+        // Padding region. Rects stay in place when hidden, only their fill goes away,
+        // so nothing has to be rebuilt when they come back.
+        const boxModelHidden = SHARED_STATE._boxModelHighlightHidden;
+        const padColor = boxModelHidden ? "transparent" : COLORS.highlightPadding;
         setRect(refs.padTop, paddingBox.left, paddingBox.top, paddingBox.width, pt, padColor);
         setRect(refs.padBottom, paddingBox.left, contentBox.top + contentBox.height, paddingBox.width, pb, padColor);
         setRect(refs.padLeft, paddingBox.left, contentBox.top, pl, contentBox.height, padColor);
         setRect(refs.padRight, contentBox.left + contentBox.width, contentBox.top, pr, contentBox.height, padColor);
 
         // Margin region
-        const margColor = COLORS.highlightMargin;
+        const margColor = boxModelHidden ? "transparent" : COLORS.highlightMargin;
         setRect(refs.marTop, marginBox.left, marginBox.top, marginBox.width, mt, margColor);
         setRect(refs.marBottom, marginBox.left, borderBox.top + borderBox.height, marginBox.width, mb, margColor);
         setRect(refs.marLeft, marginBox.left, borderBox.top, ml, borderBox.height, margColor);
@@ -595,12 +604,11 @@ function RemoteFunctions(config = {}) {
         }
 
         const element = event.target;
-        if(!LivePreviewView.isElementInspectable(element) || element.nodeType !== Node.ELEMENT_NODE) {
+
+        if (element === _lastHoverTarget) {
             return;
         }
-
-        // Same element as last hover — nothing changed, skip entirely
-        if (element === _lastHoverTarget) {
+        if(!LivePreviewView.isElementInspectable(element) || element.nodeType !== Node.ELEMENT_NODE) {
             return;
         }
         _lastHoverTarget = element;
@@ -615,19 +623,28 @@ function RemoteFunctions(config = {}) {
         }
     }
 
-    function onElementHoverOut(event) {
-        // don't want highlighting and stuff when auto scrolling
-        if (SHARED_STATE.isAutoScrolling) { return; }
+    function _clearHoverState() {
+        if (SHARED_STATE.isAutoScrolling) {
+            return;
+        }
+        if (_hoverHighlight && shouldShowHighlightOnHover()) {
+            _lastHoverTarget = null;
+            _scheduleHoverUpdate();
+        }
+    }
 
+    function onElementHoverOut(event) {
         const element = event.target;
         // Use isElementInspectable (not isElementEditable) so that JS-rendered
         // elements also get their hover highlight and hover box properly dismissed.
         if(LivePreviewView.isElementInspectable(element) && element.nodeType === Node.ELEMENT_NODE) {
-            if (_hoverHighlight && shouldShowHighlightOnHover()) {
-                _lastHoverTarget = null;
-                _scheduleHoverUpdate();
-            }
+            _clearHoverState();
         }
+    }
+
+    // for popped out window: the in-panel iframe case is forwarded parent-side via _LD.clearHoverState().
+    function onDocumentMouseLeave() {
+        _clearHoverState();
     }
 
     function scrollElementToViewPort(element) {
@@ -711,7 +728,9 @@ function RemoteFunctions(config = {}) {
 
     function disableHoverListeners() {
         window.document.removeEventListener("mouseover", onElementHover);
+        window.document.removeEventListener("mousemove", onElementHover);
         window.document.removeEventListener("mouseout", onElementHoverOut);
+        window.document.documentElement.removeEventListener("mouseleave", onDocumentMouseLeave);
         // Cancel any pending rAF hover update so stale callbacks don't fire
         if (_pendingHoverRAF) {
             cancelAnimationFrame(_pendingHoverRAF);
@@ -732,7 +751,9 @@ function RemoteFunctions(config = {}) {
         if (config.mode === 'edit' && shouldShowHighlightOnHover()) {
             disableHoverListeners();
             window.document.addEventListener("mouseover", onElementHover);
+            window.document.addEventListener("mousemove", onElementHover);
             window.document.addEventListener("mouseout", onElementHoverOut);
+            window.document.documentElement.addEventListener("mouseleave", onDocumentMouseLeave);
         }
     }
 
@@ -1039,6 +1060,25 @@ function RemoteFunctions(config = {}) {
         return results && results[0];
     };
 
+    // True for elements Phoenix adds to the page itself, like the tool boxes and
+    // the highlight overlays. They are not part of the user's source file.
+    function _isPhoenixInternalNode(node) {
+        return !!node && node.nodeType === Node.ELEMENT_NODE &&
+            (node.hasAttribute(GLOBALS.PHCODE_INTERNAL_ATTR) ||
+                node.className === GLOBALS.HIGHLIGHT_CLASSNAME);
+    }
+
+    /** The first of the Phoenix elements sitting at the end of `parent`, else null. */
+    function _firstTrailingInternalNode(parent) {
+        let node = parent.lastChild;
+        let first = null;
+        while (_isPhoenixInternalNode(node)) {
+            first = node;
+            node = node.previousSibling;
+        }
+        return first;
+    }
+
     /**
      * @private
      * Insert a new child element
@@ -1053,7 +1093,12 @@ function RemoteFunctions(config = {}) {
         if (edit.firstChild) {
             before = targetElement.firstChild;
         } else if (edit.lastChild) {
-            after = targetElement.lastChild;
+            // Phoenix's tool boxes are the last children of <body>, so appending
+            // here would put the new element after them, in the wrong place.
+            before = _firstTrailingInternalNode(targetElement);
+            if (!before) {
+                after = targetElement.lastChild;
+            }
         }
 
         if (before) {
@@ -1189,6 +1234,7 @@ function RemoteFunctions(config = {}) {
             targetElement,
             childElement,
             self = this;
+        let selectedElementMutated = false;
 
         this.rememberedNodes = {};
 
@@ -1223,9 +1269,15 @@ function RemoteFunctions(config = {}) {
             case "attrChange":
             case "attrAdd":
                 targetElement.setAttribute(edit.attribute, self._parseEntities(edit.value));
+                if (targetElement === previouslySelectedElement) {
+                    selectedElementMutated = true;
+                }
                 break;
             case "attrDelete":
                 targetElement.removeAttribute(edit.attribute);
+                if (targetElement === previouslySelectedElement) {
+                    selectedElementMutated = true;
+                }
                 break;
             case "elementDelete":
                 if (targetElement.remove) {
@@ -1360,8 +1412,21 @@ function RemoteFunctions(config = {}) {
                         SHARED_STATE._editorBox.element = freshElement;
                     }
                     redrawEverything();
+                    selectedElementMutated = true;
                 }
             }
+        }
+
+        // neither path above refreshes selection-anchored UI CONTENT (the paths
+        // only reposition / re-point element refs), so content rendered at
+        // selection time — e.g. the control box's tag/#id/.classes line — would
+        // stay stale after the selected element's markup changed
+        if (selectedElementMutated && previouslySelectedElement && previouslySelectedElement.isConnected) {
+            getAllToolHandlers().forEach(function (handler) {
+                if (handler.onSelectedElementMutated) {
+                    handler.onSelectedElementMutated(previouslySelectedElement);
+                }
+            });
         }
     };
 
@@ -1444,6 +1509,9 @@ function RemoteFunctions(config = {}) {
             _pendingHoverRAF = null;
         }
 
+        // the selection is gone, so a popover can no longer turn the fills back on
+        SHARED_STATE._boxModelHighlightHidden = false;
+
         // Highlight.clear() removes all overlay divs (outline + margin/padding rects)
         hideHighlight();
 
@@ -1457,27 +1525,38 @@ function RemoteFunctions(config = {}) {
         }
     }
 
+    // Only the children that came from the source file. Phoenix's own elements have
+    // no data-brackets-id, and counting them would shift the tree path indexes.
+    function _instrumentedChildren(parent) {
+        const result = [];
+        const children = (parent && parent.children) || [];
+        for (let i = 0; i < children.length; i++) {
+            if (children[i].hasAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR)) {
+                result.push(children[i]);
+            }
+        }
+        return result;
+    }
+
     /**
      * Compute the tree path of an element as an array of child indices
      * from <html> down. Used to re-locate the element after re-instrumentation
      * when data-brackets-id changes and text matching is ambiguous.
      * E.g. [1, 0, 0, 1] means html > 2nd child > 1st child > 1st child > 2nd child.
+     * @return {?Array.<number>} null if the element did not come from the source file.
      */
     function _getTreePath(element) {
         const path = [];
         let el = element;
         while (el && el.parentElement) {
-            const parent = el.parentElement;
-            const children = parent.children;
-            for (let i = 0; i < children.length; i++) {
-                if (children[i] === el) {
-                    path.unshift(i);
-                    break;
-                }
+            const index = _instrumentedChildren(el.parentElement).indexOf(el);
+            if (index === -1) {
+                return null;
             }
-            el = parent;
+            path.unshift(index);
+            el = el.parentElement;
         }
-        return path;
+        return path.length ? path : null;
     }
 
     /**
@@ -1486,10 +1565,11 @@ function RemoteFunctions(config = {}) {
     function _getElementByTreePath(path) {
         let el = document.documentElement;
         for (let i = 0; i < path.length; i++) {
-            if (!el || !el.children || !el.children[path[i]]) {
+            const siblings = _instrumentedChildren(el);
+            if (!siblings[path[i]]) {
                 return null;
             }
-            el = el.children[path[i]];
+            el = siblings[path[i]];
         }
         return el;
     }
@@ -1570,12 +1650,12 @@ function RemoteFunctions(config = {}) {
 
     function _handleEscapeKeyPress() {
         enableHoverListeners(); // so that if hover lock is there it will get cleared
-        dismissUIAndCleanupState();
         getAllToolHandlers().forEach(handler => {
             if (handler.handleEscapePress) {
                 handler.handleEscapePress();
             }
         });
+        dismissUIAndCleanupState();
     }
 
     // Modifier shortcuts forwarded to the Phoenix KeyBindingManager. Clipboard
@@ -1692,6 +1772,21 @@ function RemoteFunctions(config = {}) {
         }
     }
 
+    /**
+     * Hide just the margin/padding fills of the selected element highlight, keeping
+     * the outline and the selection itself. Used while editing paint properties like
+     * background color, where the fills sit on top of what the user is changing.
+     * @param {Boolean} hidden
+     */
+    function setBoxModelHighlightHidden(hidden) {
+        hidden = !!hidden;
+        if (SHARED_STATE._boxModelHighlightHidden === hidden) {
+            return;
+        }
+        SHARED_STATE._boxModelHighlightHidden = hidden;
+        redrawHighlights();
+    }
+
     let customReturns = {};
     // only apis that needs to be called from phoenix js layer should be customReturns. APis that are shared within
     // the remote function context only should not be in customReturns and should be in
@@ -1714,7 +1809,9 @@ function RemoteFunctions(config = {}) {
         "getHighlightCount": getHighlightCount,
         "getHighlightTrackingElement": getHighlightTrackingElement,
         "getHighlightStyle": getHighlightStyle,
-        "setHotCornerHidden": setHotCornerHidden
+        "setHotCornerHidden": setHotCornerHidden,
+        "setBoxModelHighlightHidden": setBoxModelHighlightHidden,
+        "clearHoverState": _clearHoverState
     };
 
     // the below code comment is replaced by added scripts for extensibility
