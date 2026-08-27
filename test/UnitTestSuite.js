@@ -36,7 +36,9 @@ define(function (require, exports, module) {
     require("spec/EditorRedraw-test");
     require("spec/EditorCommandHandlers-test");
     require("spec/EditorCommandHandlers-integ-test");
+    require("spec/JumpToDefinitionMultiTarget-integ-test");
     require("spec/EditorManager-test");
+    require("spec/EncodingDetector-test");
     require("spec/EventDispatcher-test");
     require("spec/EventManager-test");
     require("spec/ExtensionInterface-test");
@@ -109,6 +111,7 @@ define(function (require, exports, module) {
     require("spec/QuickViewManager-test");
     require("spec/SelectionViewManager-test");
     require("spec/BeautificationManager-test");
+    require("spec/Beautify-integ-test");
     require("spec/Template-for-integ-test");
     require("spec/LiveDevelopmentMultiBrowser-test");
     require("spec/LiveDevelopmentCustomServer-test");
@@ -139,6 +142,7 @@ define(function (require, exports, module) {
     require("spec/Extn-JSONSupport-test");
     require("spec/Extn-JSONSupport-integ-test");
     require("spec/Extn-CollapseFolders-integ-test");
+    require("spec/Extn-MigrateAssist-test");
     require("spec/Extn-Tabbar-integ-test");
     require("spec/Extn-CustomSnippets-test");
     require("spec/Extn-CustomSnippets-integ-test");

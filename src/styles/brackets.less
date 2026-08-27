@@ -46,6 +46,7 @@
 @import "Extn-CSSColorPreview.less";
 @import "Extn-CustomSnippets.less";
 @import "Extn-CollapseFolders.less";
+@import "Extn-MigrateAssist.less";
 @import "Extn-SidebarTabs.less";
 @import "Extn-BottomPanelTabs.less";
 @import "Extn-AIChatPanel.less";
@@ -190,6 +191,58 @@ html, body {
     box-shadow: inset 1px 0 0 0 @bc-primary-btn-border, inset -1px 0 0 0 @bc-primary-btn-border; /* Left, right shadow */
 }
 
+// Subdued outline shown for every remaining stop of an active snippet/tab-stop session (see
+// editor/TabstopManager.js) - a neutral border color, distinct from the bold "active" variant below.
+// Uses @bc-editor-decoration-neutral (no .dark & split - see its own definition for why editor-canvas
+// decorations need one universal mid-tone value instead of a light/dark UI-chrome color pair).
+.editor-text-tabstop-outline {
+    border-top: 1px @bc-editor-decoration-neutral solid;
+    border-bottom: 1px @bc-editor-decoration-neutral solid;
+}
+.editor-text-tabstop-outline-left {
+    box-shadow: inset 1px 0 0 0 @bc-editor-decoration-neutral; /* Left shadow */
+}
+.editor-text-tabstop-outline-right {
+    box-shadow: inset -1px 0 0 0 @bc-editor-decoration-neutral; /* right shadow */
+}
+.editor-text-tabstop-outline-left.editor-text-tabstop-outline-right {
+    box-shadow: inset 1px 0 0 0 @bc-editor-decoration-neutral, inset -1px 0 0 0 @bc-editor-decoration-neutral; /* Left, right shadow */
+}
+
+// Bold/active outline for whichever stop is currently selected, layered on top of the subdued one
+// above (same accent color rename-outline uses, for a consistent "you're actively editing here"
+// visual language across features).
+.editor-text-tabstop-outline-active {
+    border-top: 1px @bc-primary-btn-border solid;
+    border-bottom: 1px @bc-primary-btn-border solid;
+
+    .dark & {
+        border-top: 1px @dark-bc-primary-btn-border solid;
+        border-bottom: 1px @dark-bc-primary-btn-border solid;
+    }
+}
+.editor-text-tabstop-outline-active-left {
+    box-shadow: inset 1px 0 0 0 @bc-primary-btn-border;
+
+    .dark & {
+        box-shadow: inset 1px 0 0 0 @dark-bc-primary-btn-border;
+    }
+}
+.editor-text-tabstop-outline-active-right {
+    box-shadow: inset -1px 0 0 0 @bc-primary-btn-border;
+
+    .dark & {
+        box-shadow: inset -1px 0 0 0 @dark-bc-primary-btn-border;
+    }
+}
+.editor-text-tabstop-outline-active-left.editor-text-tabstop-outline-active-right {
+    box-shadow: inset 1px 0 0 0 @bc-primary-btn-border, inset -1px 0 0 0 @bc-primary-btn-border;
+
+    .dark & {
+        box-shadow: inset 1px 0 0 0 @dark-bc-primary-btn-border, inset -1px 0 0 0 @dark-bc-primary-btn-border;
+    }
+}
+
 // error class has highest visual precedence, followed by warning, spell error and info.
 // .error.error: This selector has 4x the class name, which increases its specificity compared to single class
 // selectors like .warning or .info. Even if error, warning, and info are used on the same div in any order,
@@ -283,7 +336,7 @@ a, img {
         left: (@sidebar-width + 30px);  // changed dynamically via Resizer + CentralControlBar
         right: @main-toolbar-width;
         z-index: @z-index-brackets-main-content;
-        border-left: 2px solid rgba(255, 255, 255, 0.10);
+        border-left: 2px solid transparent;
         border-right: 2px solid rgba(255, 255, 255, 0.10);
     }
 
@@ -2586,6 +2639,39 @@ a, img {
     p { margin: 6px 0; }
     p:first-child { margin-top: 0; }
     p:last-child { margin-bottom: 0; }
+
+    // File + line label the jump-to-definition multi-target picker prepends before its code
+    // excerpt - see languageTools/DefaultProviders.js showJumpTargetPicker()/showExcerptFor().
+    // Filename (+ dimmer directory, when the candidate isn't in the file you jumped from) on the
+    // left, line number flush to the right.
+    .jump-to-def-excerpt-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 10px;
+        font-size: 11px;
+        color: @bc-text-medium;
+        margin-bottom: 4px;
+
+        .dark & {
+            color: @dark-bc-text-medium;
+        }
+
+        &-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        &-path {
+            opacity: 0.6;
+        }
+
+        &-line {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+    }
 
     // Headings (e.g. the package-name header in npm hint docs): kill the browser's large default
     // margins - a first-child heading otherwise adds its top margin to the popup's own padding and

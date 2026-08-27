@@ -694,28 +694,77 @@ a:focus {
             }
         }
 
-        // Styles used for inlinemenu widget header
+        // Styles used for inlinemenu widget header. Previously a solid @bc-panel-bg-alt chip -
+        // against the menu's own @bc-menu-bg/@dark-bc-menu-bg surface (white / near-black) that
+        // read as a mismatched floating block sitting on top of the list, especially in dark theme.
+        // Instead, keep it on the same surface as the rest of the menu (no background at all) and
+        // read it as a plain muted title with a hairline divider separating it from the items
+        // below. Same treatment as the code-excerpt popup's own title bar
+        // (.jump-to-def-excerpt-title in brackets.less), so the two pieces of one picker look like
+        // one cohesive, deliberately minimal surface instead of two.
         li.inlinemenu-header a {
-            background-color: @bc-bg-tool-bar;
-            color: @bc-inlinemenu-text;
-            padding-bottom: 5px;
+            background-color: transparent;
+            color: @bc-text-medium;
+            padding-top: 6px;
+            padding-bottom: 6px;
+            // Same divider color this menu family already uses for its .divider rule above, so the
+            // header's separator reads as an intentional, on-brand line rather than an arbitrary
+            // one-off - and unlike a low-alpha white/black overlay, it stays visible against the
+            // near-black @dark-bc-menu-bg surface.
+            border-bottom: 1px solid @bc-menu-separator;
 
             .dark & {
-                background-color: @dark-bc-bg-tool-bar;
-                color: @dark-bc-inlinemenu-text;
-                padding-bottom: 5px;
+                color: @dark-bc-text-medium;
+                border-bottom-color: @dark-bc-menu-separator;
             }
 
             &:hover {
-                background-color: @bc-bg-tool-bar;
-                color: @bc-inlinemenu-text;
-                padding-bottom: 5px;
+                background-color: transparent;
+                color: @bc-text-medium;
 
                 .dark & {
-                    background-color: @dark-bc-bg-tool-bar;
-                    color: @dark-bc-inlinemenu-text;
-                    padding-bottom: 5px;
+                    color: @dark-bc-text-medium;
                 }
+            }
+        }
+
+        // Muted directory suffix on jump-to-definition's multi-target picker items - see
+        // languageTools/DefaultProviders.js showJumpTargetPicker(). Scoped here since
+        // .quick-open-path (used for the same muted-path look in QuickOpen) only applies under
+        // .quick-search-container.
+        .jump-to-def-item-path {
+            color: @bc-text-medium;
+            font-size: 11px;
+
+            .dark & {
+                color: @dark-bc-text-medium;
+            }
+        }
+
+        // "Implementation" marker shown flush right on a jump-to-definition item's row when the
+        // row represents one (see showJumpTargetPicker's implementationStartIndex) - the
+        // declaration row and its implementations otherwise look identical once merged into one
+        // list, with nothing else to tell them apart. Right-aligned via float, deliberately not
+        // display:flex on a wrapper: that was tried and reliably added ~11px of unexplained row
+        // height, because a block-level flex child inside InlineMenu's own inline <span> wrapper
+        // (widgets/InlineMenu.js _addItem) gets boxed in an anonymous block that still carries the
+        // parent's own line-height as a "strut". A float is taken out of normal flow entirely, so
+        // it reaches its containing block (the menu item's <a>, which is display:block) without
+        // that side effect.
+        .jump-to-def-item-badge {
+            float: right;
+            font-size: 11px;
+            color: @bc-text-medium;
+            // fa-code-branch reads as a vertical git-branch glyph by default - lay it on its side
+            // so it reads more like a generic "derives from" mark than a literal branch icon.
+            transform: rotate(90deg);
+            // li a's own right padding (see the shared "li a" rule above) is 20px, sized for plain
+            // text - pull the badge back into most of that so it doesn't float in its own patch of
+            // empty space, while still leaving a little breathing room off the popup's edge.
+            margin-right: -14px;
+
+            .dark & {
+                color: @dark-bc-text-medium;
             }
         }
 
@@ -839,12 +888,13 @@ a:focus {
     line-height: inherit;
 }
 
+// Always absolutely positioned (not just while highlighted) so that when it's hidden
+// (visibility: hidden, below) it's taken out of normal flow entirely - otherwise, on a
+// static-positioned item that isn't highlighted, this label's own reserved inline box can
+// still wrap the row onto a second line, leaving a blank line behind and shifting every
+// hint below it down as selection moves off this item (see #618 follow-up).
 .custom-snippet-code-hint {
     visibility: hidden;
-}
-
-.codehint-menu .dropdown-menu li .highlight .custom-snippet-code-hint {
-    visibility: visible;
     position: absolute;
     right: 0;
     margin-top: -2px;
@@ -855,6 +905,10 @@ a:focus {
     .dark& {
       color: @dark-css-codehint-icon !important;
     }
+}
+
+.codehint-menu .dropdown-menu li .highlight .custom-snippet-code-hint {
+    visibility: visible;
 }
 
 .custom-snippets-hint {
