@@ -68,7 +68,7 @@
     <!-- start inline javascript and non module bootstrap scripts. you must add module scripts to the
      javascript module section only!!-->
 <!--    The app cache version is set by the pipeline version update script. Do not update manually.-->
-    <script>window.PHOENIX_APP_CACHE_VERSION="5.5.2";</script>
+    <script>window.PHOENIX_APP_CACHE_VERSION="5.5.12";</script>
 <!--    The app cache version is set by the pipeline version update script. Do not update manually.-->
     <script>
         if(["dev.phcode.dev", "staging.phcode.dev"].includes(location.hostname)
@@ -922,7 +922,12 @@
                 <div id="newProject" class="new-project-btn btn-alt-quiet"></div>
             </div>
             <div>
-                <a id="phcode-io-main-nav" href="https://phcode.io" target="_blank" rel="noopener">phcode.io</a>
+                <!-- Deliberately empty: profile-menu.js fills this once it knows what belongs
+                     here - the plan name for pro users, localized "Get Phoenix Pro" for free
+                     ones. Anything shipped here would be a guess made before entitlements
+                     resolve, and it would be shown to every user including the paying ones. -->
+                <a id="phcode-io-main-nav" href="https://phcode.dev/pricing?promo=FreeNavbar"
+                   target="_blank" rel="noopener"></a>
             </div>
             <div id="mainNavBarRight">
                 <div id="navBackButton" class="nav-back-btn btn-alt-quiet"><i class="fa-solid fa-arrow-left"></i></div>

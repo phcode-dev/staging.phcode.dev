@@ -50,6 +50,7 @@
 @import "Extn-SidebarTabs.less";
 @import "Extn-BottomPanelTabs.less";
 @import "Extn-AIChatPanel.less";
+@import "Extn-LayersPanel.less";
 @import "CentralControlBar.less";
 @import "Extn-PhoenixTour.less";
 @import "Extn-Terminal.less";
@@ -90,6 +91,14 @@ html, body {
 
 #phcode-io-main-nav{
     color: @dark-bc-text-link;
+}
+
+// crown on the free "Get Phoenix Pro" upsell. same gold as the pro crowns in the
+// live preview device dropdown, so the pro marker reads the same everywhere.
+#phcode-io-main-nav .fa-crown{
+    color: #FBB03B;
+    margin-left: 4px;
+    font-size: 0.9em;
 }
 
 #phcode-io-main-nav.phoenix-pro{
@@ -410,6 +419,22 @@ a, img {
     .dark & {
         color: @dark-bc-text-quiet;
     }
+}
+
+/* Something outside the app is driving this window. Deliberately loud: it is
+   the one status the user must not overlook, and unlike the rest of the bar it
+   is not a setting they chose. Shown only while a controller is attached, so a
+   quiet bar means nobody is connected. */
+.mcp-controlled-indicator {
+    /* Its own background, so it reads the same against either theme's bar. Not
+       @bc-error, which is a pink that only reaches 3.4:1 against white text and
+       looks decorative; this is 5.3:1 and reads as an alert. */
+    background: #c9302c;
+    color: #fff;
+    font-weight: 600;
+    padding: 0 8px;
+    border-radius: 3px;
+    margin: 2px 4px;
 }
 
 .hide-status-indicators > *:not(.global-indicator) {
@@ -1546,6 +1571,16 @@ a, img {
 
 .working-set-header-title{
     font-size: 15px;
+}
+
+// Keep project context typography consistent between Files and Layers.
+#project-title,
+.layers-tab-container .layers-files-project-name {
+    font-family: @sansFontFamily;
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 18px;
+    letter-spacing: 0.14px;
 }
 
 #project-files-header {

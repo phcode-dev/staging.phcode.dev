@@ -54,6 +54,32 @@ define(function (require, exports, module) {
 
     MainViewManager._initialize($("#mock-main-view"));
 
+    // Test-only orphan cleanup: refresh well before the Node idle timeout.
+    const NODE_IDLE_EXIT_MS = 120000;
+    const NODE_HEARTBEAT_MS = 30000;
+
+    /**
+     * Refresh the idle-exit watchdogs for this runner and its test window.
+     * A beforeunload terminate write can be lost, so abandoned engines need a fallback.
+     * Sleep or page suspension can also stop heartbeats and cause a false Node crash
+     * dialog after wake. This tradeoff is accepted only for tests: normal editor
+     * sessions must leave the watchdog disabled (see src-node/index.js for history).
+     *
+     * @returns {void}
+     */
+    function _keepNodeEnginesAlive() {
+        [window, _testWindow].forEach(function (win) {
+            if (win && win.PhNodeEngine && win.PhNodeEngine.setIdleExit) {
+                try {
+                    win.PhNodeEngine.setIdleExit(NODE_IDLE_EXIT_MS);
+                } catch (e) {
+                    // a window mid-teardown is exactly the case we want reaped
+                }
+            }
+        });
+    }
+    setInterval(_keepNodeEnginesAlive, NODE_HEARTBEAT_MS);
+
     // When the test runner page reloads (e.g. switching test
     // categories), terminate the test window's Node engine so
     // its phnode.exe process and children (ESLint runners,
@@ -603,6 +629,32 @@ define(function (require, exports, module) {
     }
 
 
+    /**
+     * Dismisses every modal dialog open in the test window, as Escape would.
+     * The window is shared by the suites of a run: a dialog one suite leaves
+     * up would sit over the next, and a dialog raised while parking the
+     * project (a beforeProjectClose veto) would hold the park open.
+     */
+    async function _dismissTestWindowDialogs() {
+        const test = _testWindow && _testWindow.brackets && _testWindow.brackets.test;
+        if (!test || !test.Dialogs) {
+            return;
+        }
+        const $open = _testWindow.$(".modal.instance:visible");
+        if (!$open.length) {
+            return;
+        }
+        // Named, so the suite that left it can be found.
+        const titles = $open.map(function () {
+            return _testWindow.$(this).find(".dialog-title").text().trim() || this.className;
+        }).get();
+        console.warn("SpecRunnerUtils: dismissing dialogs left open:", titles);
+        test.Dialogs.cancelModalDialogIfOpen("modal");
+        await awaitsFor(function () {
+            return _testWindow.$(".modal.instance:visible").length === 0;
+        }, "dialogs left open to be dismissed", 2000);
+    }
+
     function _isBracketsDoneLoading() {
         return _testWindow && _testWindow.brackets && _testWindow.brackets.test && _testWindow.brackets.test.doneLoading;
     }
@@ -715,12 +767,26 @@ define(function (require, exports, module) {
                 _testWindow = testIframe.contentWindow;
             }
         } else if(!_testWindow.brackets || !_testWindow.executeCommand){
+            // Navigating away abandons this window's Node engine. Tauri, not the
+            // webview, owns that child process and holds its stdin open, so nothing
+            // closes it on its own - src-node only exits on an explicit terminate or
+            // when stdin closes. Reap it here or it outlives the run as an orphan,
+            // still holding its LSP servers.
+            if(_testWindow.PhNodeEngine){
+                try {
+                    _testWindow.PhNodeEngine.terminateNode();
+                } catch (e) {
+                    // the window may already be too far gone to ask
+                }
+            }
             _testWindow.location.href = 'about:blank';
             _testWindow.location.href = _testWindowURL;
         } else {
             if(!_testWindow.closeAllFiles){
                 _setupTestWindow();
             }
+            // Start clean, whatever the suite before left up.
+            await _dismissTestWindowDialogs();
             await _testWindow.closeAllFiles();
         }
 
@@ -777,12 +843,18 @@ define(function (require, exports, module) {
             if(!_testWindow.closeAllFiles){
                 _setupTestWindow();
             }
-            await _testWindow.closeAllFiles();
-            if(!force){
-                await jsPromise(_testWindow.brackets.test.CommandManager.execute(Commands.CMD_SPLITVIEW_NONE));
-                _testWindow.brackets.test.MainViewManager._closeAll(_testWindow.brackets.test.MainViewManager.ALL_PANES);
-                await window.Phoenix.VFS.ensureExistsDirAsync("/test/parked");
-                await loadProjectInTestWindow("/test/parked");
+            await _dismissTestWindowDialogs();
+            try {
+                await _testWindow.closeAllFiles();
+                if(!force){
+                    await jsPromise(_testWindow.brackets.test.CommandManager.execute(Commands.CMD_SPLITVIEW_NONE));
+                    _testWindow.brackets.test.MainViewManager._closeAll(_testWindow.brackets.test.MainViewManager.ALL_PANES);
+                    await window.Phoenix.VFS.ensureExistsDirAsync("/test/parked");
+                    await loadProjectInTestWindow("/test/parked");
+                }
+            } finally {
+                // One the park raised, which would otherwise outlive the suite.
+                await _dismissTestWindowDialogs();
             }
         }
 

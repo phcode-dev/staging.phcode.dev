@@ -9,7 +9,7 @@ window.AppConfig = {
         "about_icon": "styles/images/phoenix-icon.svg",
         "account_url": "https://account-stage.phcode.dev/",
         "promotions_url": "https://promotions.phcode.dev/dev/",
-        "purchase_url": "https://phcode.io/pricing",
+        "purchase_url": "https://phcode.dev/pricing",
         "license_url": "https://www.gnu.org/licenses/agpl-3.0.en.html",
         "how_to_use_url": "https://github.com/adobe/brackets/wiki/How-to-Use-Brackets",
         "docs_url": "https://docs.phcode.dev/",
@@ -18,8 +18,8 @@ window.AppConfig = {
         "report_issue_url": "https://github.com/phcode-dev/phoenix/issues/new/choose",
         "get_involved_url": "https://github.com/phcode-dev/phoenix/discussions/77",
         "release_notes_url": "https://github.com/adobe/brackets/wiki/Release-Notes",
-        "homepage_url": "https://phcode.io",
-        "update_download_page": "https://phcode.io/",
+        "homepage_url": "https://phcode.dev",
+        "update_download_page": "https://phcode.dev/",
         "twitter_url": "https://twitter.com/phcodedev",
         "youtube_url": "https://www.youtube.com/channel/UCNK2a8DKqPQQe3GlfTk-RHg",
         "troubleshoot_url": "https://github.com/adobe/brackets/wiki/Troubleshooting#wiki-livedev",
@@ -36,11 +36,11 @@ window.AppConfig = {
         "extensionTakedownURL": "https://updates.phcode.io/extension_takedown.json",
         "lsp_server_pins": {
             "intelephense": "1.18.5",
-            "pyrefly": "1.1.1",
-            "ruff": "0.15.20"
+            "pyrefly": "1.2.0",
+            "ruff": "0.16.5"
         },
         "linting.enabled_by_default": true,
-        "build_timestamp": "2026-08-29T17:59:29.701Z",
+        "build_timestamp": "2026-10-28T07:00:55.789Z",
         "googleAnalyticsID": "G-FP5S9BKDSJ",
         "googleAnalyticsIDDesktop": "G-D5R1Y6PTS8",
         "mixPanelID": "a7e08ffd43c37767c29b13df1d2e6c62",
@@ -52,8 +52,8 @@ window.AppConfig = {
         "bugsnagEnv": "staging"
     },
     "name": "Phoenix Code",
-    "version": "5.5.2-23364",
-    "apiVersion": "5.5.2",
+    "version": "5.5.12-23833",
+    "apiVersion": "5.5.12",
     "homepage": "https://core.ai",
     "issues": {
         "url": "https://github.com/phcode-dev/phoenix/issues"

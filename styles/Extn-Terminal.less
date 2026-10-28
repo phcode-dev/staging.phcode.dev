@@ -27,6 +27,7 @@
     --terminal-foreground: #cccccc;
     --terminal-cursor: #ffffff;
     --terminal-selection: rgba(255, 255, 255, 0.2);
+    --terminal-scrollbar-thumb: rgba(255, 255, 255, 0.24);
     --terminal-border: #333333;
     --terminal-toolbar-bg: #1e1e1e;
     --terminal-tab-bg: #181818;
@@ -57,6 +58,7 @@
     --terminal-foreground: #383a42;
     --terminal-cursor: #383a42;
     --terminal-selection: rgba(0, 0, 0, 0.12);
+    --terminal-scrollbar-thumb: @linux-scrollbar-thumb;
     --terminal-border: #e0e0e0;
     --terminal-toolbar-bg: #f5f5f5;
     --terminal-tab-bg: #eeeeee;
@@ -99,8 +101,10 @@
 /* Tab bar: static sidebar, width switches via .terminal-tabs-expanded on container */
 .terminal-tab-bar {
     position: relative;
-    width: 60px;
-    min-width: 60px;
+    /* wide enough for a short name; the strip shows names rather than a row of
+       identical terminal icons, which told the tabs apart not at all */
+    width: 84px;
+    min-width: 84px;
 }
 
 .terminal-tabs-expanded .terminal-tab-bar {
@@ -169,24 +173,12 @@
     box-shadow: inset 2px 0 0 #007acc;
 }
 
-/* Icon column: fixed 30px slot */
-.terminal-flyout-icon {
-    width: 30px;
-    min-width: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    flex-shrink: 0;
-}
-
-/* Title & CWD: hidden in collapsed, shown in expanded */
+/* Title always shows; the CWD is what collapsed drops for want of room */
 .terminal-flyout-title {
     flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    display: none;
 }
 
 .terminal-flyout-cwd {
@@ -229,10 +221,6 @@
 }
 
 /* ─── Expanded mode ─── */
-.terminal-tabs-expanded .terminal-flyout-title {
-    display: block;
-}
-
 .terminal-tabs-expanded .terminal-flyout-cwd {
     display: block;
 }
@@ -240,6 +228,111 @@
 /* Reserve space so cwd text doesn't sit under the close button */
 .terminal-tabs-expanded .terminal-flyout-cwd {
     margin-right: 20px;
+}
+
+/* ─── Tab name and its hover controls ─── */
+/* The row always carries its name. The icon it replaces was the same glyph on
+   every row, so it said nothing the name does not say better. */
+.terminal-flyout-title {
+    padding-left: 8px;
+}
+
+/* A name the user typed, set apart from the process name detected for them */
+.terminal-flyout-item.renamed .terminal-flyout-title {
+    font-style: italic;
+}
+
+/* Rename pencil: sits inboard of the close, so both hover controls share the
+   right edge and the name's left edge never shifts under the pointer. */
+.terminal-flyout-edit {
+    position: absolute;
+    right: 20px;
+    top: 0;
+    bottom: 0;
+    width: 20px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--terminal-tab-text);
+    background: transparent;
+    z-index: 1;
+    cursor: pointer;
+}
+
+.terminal-flyout-item:hover .terminal-flyout-edit {
+    display: flex;
+}
+
+.terminal-flyout-edit:hover {
+    color: var(--terminal-tab-active-text);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Hovering trades the cwd for the controls. Reserving room for them instead
+   would mean retuning this margin for every control ever added to the right
+   edge — which is how the 20px above went stale the moment a second one
+   appeared — and it leaves the name more room, not less. */
+.terminal-flyout-item:hover .terminal-flyout-cwd {
+    display: none;
+}
+
+.terminal-flyout-item:hover .terminal-flyout-title {
+    padding-right: 40px;
+}
+
+/* Rename field, sized to sit on the row rather than grow it.
+   Matched on the attribute as well as the class: the theme's own
+   input[type="text"] sets a height, padding and border of its own, and
+   outranks a lone class, so a plain .terminal-flyout-rename would render at
+   the full row height. This takes the rule above it without !important. */
+input[type="text"].terminal-flyout-rename {
+    box-sizing: border-box;
+    flex: 1;
+    min-width: 0;
+    height: 20px;
+    /* all four sides, because the theme gives form inputs a bottom margin of
+       their own and that pushes the field off the row's centre line */
+    margin: 0 22px 0 6px;
+    padding: 0 4px;
+    font-size: 12px;
+    line-height: 18px;
+    /* background and text colour are left to the theme's own input styling, so
+       this field reads like every other one — white on a light theme rather
+       than a dark patch on a light strip. Only the border is ours, to mark the
+       row as being edited. */
+    border: 1px solid #007acc;
+    border-radius: 2px;
+    outline: none;
+}
+
+/* Nothing competes with the field while it is open */
+.terminal-flyout-item.renaming .terminal-flyout-edit,
+.terminal-flyout-item.renaming .terminal-flyout-close,
+.terminal-flyout-item.renaming .terminal-flyout-cwd {
+    display: none;
+}
+
+/* Confirm button, in the slot the pencil and close vacate while editing */
+.terminal-flyout-rename-done {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--terminal-tab-text);
+    background: transparent;
+    z-index: 2;
+    cursor: pointer;
+}
+
+.terminal-flyout-rename-done:hover {
+    color: var(--terminal-tab-active-text);
+    background: rgba(255, 255, 255, 0.1);
 }
 
 
@@ -363,6 +456,84 @@
     overflow: hidden;
 }
 
+.terminal-project-banner {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 5;
+    box-sizing: border-box;
+    max-height: 100%;
+    overflow: auto;
+    padding: 8px 10px;
+    background: var(--terminal-toolbar-bg);
+    color: var(--terminal-foreground);
+    border-top: 1px solid var(--terminal-border);
+    border-left: 3px solid var(--terminal-ansi-yellow);
+    box-shadow: 0 -3px 6px rgba(0, 0, 0, 0.2);
+    white-space: normal;
+
+    .terminal-project-message,
+    .terminal-project-path {
+        padding-right: 28px;
+    }
+
+    .terminal-project-path {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin: 4px 0;
+        font-weight: 600;
+    }
+
+    .terminal-project-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .terminal-project-dismiss {
+        position: absolute;
+        top: 5px;
+        right: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        margin: 0;
+        border: 0;
+        border-radius: 3px;
+        background: transparent;
+        box-shadow: none;
+        color: inherit;
+        font-size: 21px;
+        line-height: 1;
+        cursor: pointer;
+        opacity: 0.75;
+
+        &:hover {
+            background: rgba(128, 128, 128, 0.18);
+            opacity: 1;
+        }
+
+        &:focus-visible {
+            outline: 2px solid currentColor;
+            outline-offset: 1px;
+            opacity: 1;
+        }
+
+        &:disabled {
+            background: transparent;
+            cursor: default;
+            opacity: 0.4;
+        }
+    }
+}
+
 .terminal-instance-container {
     position: absolute;
     top: 0;
@@ -387,6 +558,51 @@
 .terminal-instance-container .xterm-viewport {
     overflow-y: auto;
     background-color: var(--terminal-background) !important;
+}
+
+// xterm draws DOM scrollbars, so the app's native scrollbar selectors do not apply.
+.terminal-instance-container .xterm .xterm-scrollable-element > .xterm-scrollbar {
+    &:hover {
+        background-color: var(--terminal-scrollbar-track-hover, transparent);
+    }
+
+    > .xterm-slider {
+        box-sizing: border-box;
+        border: 2px solid transparent;
+        border-radius: 999px;
+        background-color: var(--terminal-scrollbar-thumb);
+        background-clip: padding-box;
+
+        &:hover {
+            background-color: var(--terminal-scrollbar-thumb-hover, var(--terminal-scrollbar-thumb));
+        }
+
+        &.xterm-active {
+            background-color: var(--terminal-scrollbar-thumb-active, var(--terminal-scrollbar-thumb));
+        }
+
+        .platform-win & {
+            border: none;
+            border-radius: 0;
+        }
+    }
+}
+
+// Match the Windows colors in brackets_scrollbars.less, including the always-dark AI terminals.
+.platform-win .terminal-panel-container {
+    --terminal-scrollbar-thumb: @win-scrollbar-thumb;
+    --terminal-scrollbar-thumb-hover: @win-scrollbar-thumb-hover;
+    --terminal-scrollbar-thumb-active: @win-scrollbar-thumb-active;
+    --terminal-scrollbar-track-hover: @win-scrollbar-track;
+}
+
+.dark.platform-win .terminal-panel-container,
+.darkTheme.platform-win .terminal-panel-container,
+.platform-win .ai-chat-body-cli {
+    --terminal-scrollbar-thumb: rgb(49, 49, 49);
+    --terminal-scrollbar-thumb-hover: rgb(89, 89, 89);
+    --terminal-scrollbar-thumb-active: rgb(169, 169, 169);
+    --terminal-scrollbar-track-hover: rgba(15, 15, 15, 0.5);
 }
 
 /* Empty state */

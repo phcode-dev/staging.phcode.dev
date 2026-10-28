@@ -1,0 +1,23 @@
+{{#commits}}
+{{#isRemoteHead}}
+<tr class="history-push-line{{#isAhead}} ahead{{/isAhead}}">
+    <td colspan="4">
+        <div class="push-line-inner">
+            <span class="push-line-ref"><i class="octicon octicon-cloud"></i>{{remoteRef}}</span>
+            <span class="push-line-rule"></span>
+            <span class="push-line-note">{{pushStateText}}</span>
+        </div>
+    </td>
+</tr>
+{{/isRemoteHead}}
+<tr class="history-commit{{#unpushed}} unpushed{{/unpushed}}" x-hash="{{hash}}">
+    <td>
+        <div class="commit-author-avatar">
+            <span style="{{cssAvatar}}">{{avatarLetter}}</span>
+        </div>
+    </td>
+    <td><span title="{{date.title}}">{{date.shown}}</span> {{Strings.HISTORY_COMMIT_BY}} <span class="commit-author">{{author}}</span></td>
+    <td class="commit-title"><span class="commit-subject">{{subject}} </span>{{#hasTag}}<span class="commit-tags" title="{{tags}}"><i class="octicon octicon-tag"></i>{{tags}}</span>{{/hasTag}}</td>
+    <td>{{hashShort}}</td>
+</tr>
+{{/commits}}

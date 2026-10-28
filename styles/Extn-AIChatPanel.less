@@ -20,6 +20,8 @@
 
 /* AI Chat Panel — sidebar chat UI for Claude Code integration */
 
+@import "Extn-AIImages.less";
+
 // AI panel typography contract — every font-size below MUST use one of these
 // (or a relative unit for headings). Centralising the scale here keeps the
 // panel coherent across cards: tool indicators, diff cards, confirm dialogs,
@@ -31,7 +33,73 @@
 @ai-text-secondary: @sidebar-small-font-size;     // 12px — in-card buttons, mono code, file paths
 @ai-text-meta:      @sidebar-xs-font-size;        // 11px — stats, status, permission/context info
 @ai-line-prose:     1.6;                          // multi-line body text — generous reading rhythm
+
+// Dialog scale. The AI tiers above are sized for a ~300px sidebar column;
+// a modal is not that, and Phoenix's own dialogs render body text at 14px.
+// Reusing the sidebar tiers in a dialog made labels 12px and notes 11px —
+// noticeably smaller than every other dialog in the app.
+@ai-dialog-text:    @menu-item-font-size;         // 14px — matches a stock dialog body
+@ai-dialog-note:    13px;                         // one tick down, still comfortably readable
 @ai-line-compact:   1.4;                          // single-line UI elements
+
+// Shared by the chat and CLI question composers, without sharing their event-target classes.
+.ai-composer-wrap() {
+    display: flex;
+    align-items: flex-end;
+    background-color: @bc-ai-input-bg;
+    border: 1px solid @bc-ai-input-border;
+    border-radius: 8px;
+    transition: border-color 0.15s ease;
+    overflow: hidden;
+
+    &:focus-within {
+        background-color: @bc-ai-input-bg-focused;
+        border-color: @bc-ai-input-border-focus;
+    }
+
+    &.disabled { opacity: 0.5; }
+}
+
+.ai-composer-textarea() {
+    flex: 1;
+    min-width: 0;
+    background: transparent !important;
+    border: none !important;
+    color: @project-panel-text-1;
+    font-size: @ai-text-body;
+    font-family: inherit;
+    padding: 10px 0 10px 12px;
+    margin: 0;
+    resize: none;
+    min-height: 24px;
+    max-height: 120px;
+    line-height: @ai-line-compact;
+    outline: none !important;
+    box-shadow: none !important;
+
+    &:disabled { cursor: not-allowed; }
+}
+
+.ai-composer-send() {
+    background: none;
+    border: none;
+    padding: 1px 6px;
+    color: @project-panel-text-2;
+    width: 30px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    align-self: stretch;
+    border-radius: 0 7px 7px 0;
+    opacity: 0.5;
+    transition: opacity 0.15s ease, color 0.15s ease;
+
+    &:hover { opacity: 1; color: @project-panel-text-1; }
+    &:disabled { opacity: 0.2; cursor: not-allowed; }
+    i { font-size: @ai-text-body; }
+}
 
 // Warning-tone chrome (e.g. the CLI-mode "project switched" banner). Must
 // stay fully opaque — it overlays live terminal output, so any see-through
@@ -55,13 +123,11 @@
     flex: 1;
     min-height: 0;
     overflow: hidden;
-    // Positioning context for the onboarding prompt overlay, which is
-    // detached from its template position and re-parented here so it
-    // covers the Files/AI tab strip as well as the panel body.
     position: relative;
 }
 
 .ai-chat-panel {
+    position: relative; // anchors .ai-scroll-to-bottom-btn
     display: flex;
     flex-direction: column;
     -webkit-box-flex: 1;
@@ -73,66 +139,50 @@
     font-size: @ai-text-body;
     container-type: inline-size;
 
-    /* Onboarding-iframe theme variables — single source of truth for
-       what gets forwarded to the iframe's `?configCSS=` param.
-       AIChatPanel.js _buildOnboardingConfigCSS reads each of these via
-       getComputedStyle and serialises them into a :root{...} block.
-       To retheme the iframe, edit only this list. The names match the
-       iframe's published contract (see ai-panel-onboarding README). */
-    --bg-panel:              @bc-ai-sidebar-bg;
-    --bg-card:               rgba(255, 255, 255, 0.04);
-    --bg-card-hover:         rgba(255, 255, 255, 0.07);
-    --bg-input:              rgba(255, 255, 255, 0.04);
-    --bg-input-focus:        rgba(255, 255, 255, 0.06);
-    --text-primary:          @project-panel-text-1;
-    --text-secondary:        @project-panel-text-2;
-    --text-muted:            rgba(168, 176, 180, 0.6);
-    --border-subtle:         rgba(255, 255, 255, 0.12);
-    --border-active:         rgba(107, 158, 255, 0.4);
-    --border-focus:          rgba(107, 158, 255, 0.5);
-    --accent-primary:        #6b9eff;
-    --accent-primary-soft:   rgba(107, 158, 255, 0.12);
-    --accent-primary-border: rgba(107, 158, 255, 0.3);
-    --font-body:             14px;
-    --font-secondary:        12px;
-    --font-meta:             11px;
-    --radius-md:             6px;
-    --radius-lg:             8px;
+    // Match Layers' dark sidebar scrollbars, including Windows light-theme hover.
+    #sidebar & {
+        .ai-chat-messages,
+        .ai-chat-start,
+        .ai-session-history-dropdown {
+            &::-webkit-scrollbar {
+                width: 9px;
+                height: 9px;
+                background-color: transparent;
+            }
+
+            &::-webkit-scrollbar-thumb {
+                border-radius: 999px;
+                background-color: rgba(255, 255, 255, 0.12);
+                background-clip: padding-box;
+                border: 2px solid transparent;
+            }
+        }
+    }
 }
 
 /* ── Header ─────────────────────────────────────────────────────────── */
 .ai-chat-header {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
     align-items: center;
-    justify-content: center;
+    gap: 6px;
     position: relative;
-    padding: 10px 10px 9px 12px;
+    padding: 10px 10px 9px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     flex-shrink: 0;
 
     .ai-chat-title-group {
         display: flex;
         align-items: center;
-        cursor: pointer;
-        padding: 2px 6px;
-        border-radius: 6px;
-        transition: background 0.15s ease;
-
-        &:hover,
-        &.dropdown-open {
-            background: rgba(255, 255, 255, 0.06);
-        }
-
-        .ai-chat-title-chevron {
-            margin-left: 5px;
-            font-size: 9px;
-            opacity: 0.5;
-        }
+        flex: 0 1 auto;
+        min-width: 0;
+        margin: 0 auto;
     }
 
     .ai-chat-title-icon {
         display: inline-flex;
         align-items: center;
+        flex: none;
         margin-right: 5px;
         opacity: 0.6;
         color: @project-panel-text-2;
@@ -143,31 +193,83 @@
         }
     }
 
-    .ai-chat-title {
-        font-weight: 400;
-        font-size: @label-font-size;
-        color: @project-panel-text-2;
-        line-height: 19px;
+    .ai-chat-title,
+    .ai-chat-history-title {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font: inherit;
+        color: inherit;
+    }
+
+    .ai-chat-history-title {
+        display: none;
     }
 
     .ai-chat-header-actions {
-        position: absolute;
-        right: 10px;
         display: flex;
         align-items: center;
+        flex: none;
+        justify-self: end;
         gap: 2px;
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.5s ease;
     }
 
+    /* Keep both control groups in the layout even while faded out, so
+       revealing them cannot cover the title or move it under the pointer. */
+    .ai-chat-header-left {
+        display: flex;
+        align-items: center;
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: 100%;
+        justify-self: start;
+        gap: 4px;
+    }
+
+    /* The way home: in the CLI modes, and in the chat once it has started.
+       Hover-revealed like .ai-chat-header-actions, and shown while it has
+       keyboard focus. */
+    .ai-back-btn {
+        display: none;
+        flex: none;
+        align-items: center;
+        gap: 5px;
+        height: 26px;
+        margin: 0;
+        padding: 0 8px 0 6px;
+        background: transparent;
+        color: @project-panel-text-2;
+        font-family: inherit;
+        font-size: @menu-item-font-size;
+        line-height: 1;
+        cursor: pointer;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.5s ease;
+
+        i {
+            font-size: 11px;
+        }
+
+        &:focus-visible {
+            outline: none;
+            border-color: fade(@ai-start-accent, 60%);
+            opacity: 1;
+            pointer-events: auto;
+            transition: opacity 0.15s ease;
+        }
+    }
+
     /* Model switcher — hover-revealed like .ai-chat-header-actions
        (Claude Code CLI doesn't persistently show the model either). */
     .ai-model-select {
-        position: absolute;
-        left: 10px;
         display: flex;
         align-items: center;
+        min-width: 0;
         gap: 5px;
         height: 26px;
         padding: 0 6px;
@@ -186,6 +288,7 @@
         }
 
         i {
+            flex: none;
             font-size: 9px;
             opacity: 0.7;
         }
@@ -203,7 +306,14 @@
         cursor: pointer;
     }
 
-    .ai-new-session-btn {
+    .ai-history-btn.active {
+        color: @ai-start-accent;
+        background-color: fade(@ai-start-accent, 15%);
+        border-color: fade(@ai-start-accent, 35%);
+    }
+
+    .ai-new-session-btn,
+    .ai-stop-cli-btn {
         display: flex;
         align-items: center;
         gap: 4px;
@@ -213,15 +323,120 @@
         padding: 0 8px;
         cursor: pointer;
     }
+
+    // Connection to Phoenix of the CLI on screen; shown by the panel only in the CLI modes,
+    // and only when the CLI was launched with one. The button opens its details and power control.
+    .ai-cli-connector-badge {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        font-size: @menu-item-font-size;
+        color: @project-panel-text-2;
+        cursor: pointer;
+
+        &:hover,
+        &[aria-expanded="true"] {
+            background: rgba(255, 255, 255, 0.09);
+        }
+
+        &:focus-visible {
+            outline: 2px solid @ai-start-accent;
+            outline-offset: -2px;
+        }
+
+        &.ai-cli-connector-visible {
+            display: flex;
+        }
+        &[data-state="connecting"] {
+            opacity: 0.6;
+        }
+        &[data-state="connected"] {
+            color: #66bb6a;
+        }
+        &[data-state="paused"] {
+            color: #e0a84c;
+        }
+        &[data-state="ended"] {
+            color: #e57373;
+        }
+    }
+
+    // Stop ends a running CLI, so it exists only in the CLI modes (below).
+    .ai-stop-cli-btn {
+        display: none;
+
+        // At 11px the square's ink centers on the label's cap height, level
+        // with New's plus; smaller, it sinks onto the baseline.
+        i {
+            font-size: 11px;
+        }
+    }
 }
 
 /* ── CLI mode ───────────────────────────────────────────────────────── */
 /* History and the model switcher are chat-UI-only concerns — the embedded
    CLI terminal has its own session/model handling. New + Settings stay. */
 .ai-chat-panel.ai-mode-cli {
+    .ai-chat-header-left {
+        flex: none;
+    }
+
     .ai-model-select,
     .ai-history-btn {
         display: none;
+    }
+
+    .ai-back-btn,
+    .ai-stop-cli-btn {
+        display: flex;
+    }
+}
+
+.ai-chat-panel.ai-chat-started:not(.ai-mode-cli):not(.ai-home) .ai-back-btn,
+.ai-chat-panel.ai-history-open .ai-back-btn {
+    display: flex;
+}
+
+.ai-chat-panel.ai-history-open .ai-chat-title-group {
+    pointer-events: none;
+
+    .ai-chat-title,
+    .ai-chat-title-icon,
+    .ai-chat-title-chevron {
+        display: none;
+    }
+
+    .ai-chat-history-title {
+        display: inline;
+    }
+}
+
+.ai-chat-panel.ai-history-open .ai-model-select {
+    display: none;
+}
+
+/* Home: the start screen laid over a chat that has started. The chat keeps
+   running underneath, its messages and input out of sight until it is
+   picked again. */
+.ai-chat-panel.ai-home {
+    .ai-model-select {
+        display: none;
+    }
+
+    // The chat shows and hides these inline as it streams, so only
+    // !important keeps them out of home.
+    .ai-chat-input-area,
+    .ai-chat-status,
+    .ai-chat-quota-bar,
+    .ai-scroll-to-bottom-btn {
+        display: none !important;
     }
 }
 
@@ -251,6 +466,7 @@
     --terminal-foreground:          #cccccc;
     --terminal-cursor:              #ffffff;
     --terminal-selection:           rgba(255, 255, 255, 0.2);
+    --terminal-scrollbar-thumb:      rgba(255, 255, 255, 0.24);
     --terminal-ansi-black:          #000000;
     --terminal-ansi-red:            #cd3131;
     --terminal-ansi-green:          #0dbc79;
@@ -277,6 +493,153 @@
     .ai-chat-body-cli {
         display: flex;
     }
+}
+
+/* One slot per embedded CLI, both living inside the single
+   .ai-chat-body-cli so they share its --terminal-* palette by inheritance
+   (TerminalInstance reads those off its own container). Only the active
+   mode's slot is shown; the other keeps its PTY running off-screen.
+
+   `position: relative` is load-bearing, not decoration: it anchors this
+   session's .terminal-instance-container (absolute; inset:0) and its
+   .ai-cli-stale-banner (absolute; bottom:0). Without it both sessions'
+   terminals and banners would position against the shared body and stack
+   on top of each other. */
+.ai-cli-session {
+    display: none;
+    position: relative;
+    flex: 1;
+    min-height: 0;
+
+    &.active {
+        display: flex;
+        flex-direction: column;
+    }
+}
+
+/* Cover the waiting terminal with its question; the CLI toolbar remains visible above it. */
+.ai-cli-rich-question {
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: @bc-ai-sidebar-bg;
+    color: @project-panel-text-1;
+
+    &:empty {
+        display: none;
+    }
+}
+
+.ai-rich-frame-panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+}
+.ai-rich-frame-header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+    h2 { margin: 0; font: inherit; font-weight: 600; color: inherit; overflow-wrap: anywhere; }
+}
+.ai-rich-frame-heading { flex: 1; min-width: 0; }
+.ai-rich-frame-context { font-size: @ai-text-secondary; opacity: 0.65; margin-bottom: 4px; overflow-wrap: anywhere; }
+.ai-rich-frame-close {
+    flex: none;
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 4px 6px;
+    opacity: 0.7;
+    &:hover:not(:disabled), &:focus-visible { opacity: 1; }
+    &:disabled { cursor: default; opacity: 0.3; }
+}
+.ai-rich-frame-close { font-size: 22px; line-height: 1; }
+.ai-rich-frame-footer {
+    flex: none;
+    padding: 10px 12px;
+    border-top: 1px solid rgba(128, 128, 128, 0.25);
+}
+.ai-rich-frame-reply {
+    .ai-composer-wrap();
+    padding: 0;
+    textarea { .ai-composer-textarea(); }
+}
+.ai-rich-frame-send { .ai-composer-send(); }
+.ai-rich-frame-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 6px;
+    .ai-rich-frame-source { flex: 1; }
+    .ai-rich-source-actions { justify-content: flex-start; }
+    .ai-rich-source-status:empty { display: none; }
+    .ai-rich-see-code { margin-left: 0; }
+    [hidden] { display: none; }
+}
+
+.ai-rich-summary {
+    margin-bottom: 10px;
+    line-height: @ai-line-prose;
+}
+
+/* Local transfer feedback: stays inside the terminal and lets typing/clicks pass through. */
+.hud-overlay.ai-cli-transfer-hud {
+    position: absolute;
+    top: auto;
+    bottom: 72px;
+    transform: translateX(-50%);
+    z-index: 6;
+    width: max-content;
+    max-width: calc(100% - 32px);
+    height: auto;
+    box-sizing: border-box;
+    flex-direction: row;
+    gap: 10px;
+    padding: 12px 16px;
+    border: 1px solid fade(@ai-start-accent, 48%);
+    border-radius: 10px;
+    background: rgba(35, 45, 63, 0.97);
+    color: #e5efff;
+    box-shadow: 0 0 18px fade(@ai-start-accent, 16%), 0 6px 24px rgba(0, 0, 0, 0.3);
+    animation: ai-cli-transfer-hud 3s ease both;
+
+    i {
+        flex-shrink: 0;
+        font-size: 18px;
+        margin: 0;
+        color: @ai-start-accent;
+    }
+
+    .hud-label {
+        min-width: 0;
+        font-size: @ai-text-body;
+        font-weight: 400;
+        line-height: 1.4;
+        letter-spacing: normal;
+        white-space: normal;
+        overflow-wrap: break-word;
+    }
+}
+
+@keyframes ai-cli-transfer-hud {
+    0%, 100% { opacity: 0; }
+    8%, 85% { opacity: 1; }
+    15% { box-shadow: 0 0 24px fade(@ai-start-accent, 30%), 0 6px 24px rgba(0, 0, 0, 0.3); }
+    50%, 85% { box-shadow: 0 0 18px fade(@ai-start-accent, 16%), 0 6px 24px rgba(0, 0, 0, 0.3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hud-overlay.ai-cli-transfer-hud { animation: none; }
 }
 
 /* "Project switched" banner over the embedded CLI terminal — a dark,
@@ -394,30 +757,174 @@
     }
 }
 
-/* Show header actions on tab container hover */
-.ai-tab-container:hover .ai-chat-header-actions {
+/* Keep header actions visible while History or connection details are open. */
+.ai-tab-container:hover .ai-chat-header-actions,
+.ai-chat-header:focus-within .ai-chat-header-actions,
+.ai-chat-panel.ai-history-open .ai-chat-header-actions,
+.ai-chat-header.ai-cli-connection-open .ai-chat-header-actions {
     opacity: 1;
     pointer-events: auto;
     transition: opacity 0.15s ease;
 }
 
+/* A body-mounted popover can extend below the header without clipping the terminal. */
+.ai-cli-connection-popover {
+    position: fixed;
+    z-index: 1000;
+    box-sizing: border-box;
+    max-width: calc(100vw - 16px);
+    padding: 16px;
+    overflow: auto;
+    background: #303030;
+    color: @project-panel-text-1;
+    border: 1px solid #515151;
+    border-radius: 8px;
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.44);
+    font-size: @ai-text-body;
+    line-height: @ai-line-compact;
+    outline: none;
+
+    .ai-cli-connection-heading { display: flex; align-items: center; gap: 10px; }
+    #ai-cli-connection-title { font-weight: 600; }
+    .ai-cli-connection-symbol {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        background: rgba(67, 133, 72, 0.14);
+        color: #8bd090;
+        font-size: 16px;
+    }
+    .ai-cli-connection-client,
+    .ai-cli-connection-description,
+    .ai-cli-connection-detail,
+    .ai-cli-connection-note {
+        color: #b6b6b6;
+        font-size: @ai-text-secondary;
+        line-height: 1.45;
+        margin-top: 3px;
+    }
+    .ai-cli-connection-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #a0d9a4;
+        margin: 15px 0 14px;
+        font-size: @ai-text-secondary;
+    }
+    .ai-cli-connection-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+    .ai-cli-connection-capability {
+        display: flex;
+        gap: 10px;
+        margin: 12px 0;
+        > i { flex: none; width: 18px; padding-top: 3px; color: #b6c0c5; text-align: center; }
+    }
+    .ai-cli-connection-footer { border-top: 1px solid #4a4a4a; margin: 16px -16px -16px; padding: 13px 16px 14px; }
+    .ai-cli-connection-power {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        border: 1px solid #666;
+        background: #393939;
+        color: #eee;
+        border-radius: 5px;
+        padding: 7px 10px;
+        font-family: inherit;
+        font-size: @ai-text-body;
+        line-height: @ai-line-compact;
+        cursor: pointer;
+        &:hover:not(:disabled) { background: #454545; border-color: #888; }
+        &:disabled { opacity: 0.5; cursor: default; }
+        &:focus-visible { outline: 2px solid @ai-start-accent; outline-offset: 2px; }
+    }
+    .ai-cli-connection-note { text-align: center; margin-top: 8px; }
+    .ai-cli-connection-error { color: #efaaaa; font-size: @ai-text-secondary; margin-top: 8px; }
+    &:not([data-state="connected"]) .ai-cli-connection-status { color: #b6b6b6; }
+    &[data-state="paused"] .ai-cli-connection-status { color: #e0a84c; }
+    &.ai-cli-connection-off {
+        .ai-cli-connection-symbol { background: rgba(255, 255, 255, 0.04); color: #aaa; }
+        .ai-cli-connection-capability { opacity: 0.45; }
+    }
+}
+
 .ai-tab-container:hover .ai-model-select,
+.ai-tab-container:hover .ai-back-btn,
+.ai-chat-header:focus-within .ai-model-select,
+.ai-chat-header:focus-within .ai-back-btn,
 .ai-tab-container .ai-model-select.dropdown-open {
     opacity: 1;
     pointer-events: auto;
     transition: opacity 0.15s ease;
 }
 
-/* Left-align title when sidebar is narrow to free space for action buttons.
-   The model switcher joins the flow so it can't overlap the title. */
-@container (max-width: 380px) {
+/* Compact both sides together so the title stays at the panel's centre. */
+@container (max-width: 560px) {
     .ai-chat-header {
-        justify-content: flex-start;
-
         .ai-model-select {
-            position: static;
-            margin-right: 8px;
             padding-left: 0;
+
+            .ai-model-select-label {
+                max-width: 72px;
+            }
+        }
+    }
+
+    .ai-chat-header .ai-back-btn {
+        padding: 0 6px;
+
+        .ai-back-text {
+            display: none;
+        }
+    }
+}
+
+/* When the header runs short, its whole action group keeps only icons, so
+   Stop and New match History and Settings; their tooltips still name them. */
+@container (max-width: 560px) {
+    .ai-chat-header-actions {
+        .ai-new-session-btn,
+        .ai-stop-cli-btn {
+            justify-content: center;
+            width: 26px;
+            padding: 0;
+        }
+
+        .ai-header-btn-label {
+            display: none;
+        }
+    }
+}
+
+/* Below this width a centred title and both control groups cannot share
+   one row. Keep the title centred above them instead of covering it. */
+@container (max-width: 400px) {
+    .ai-chat-header {
+        grid-template-columns: minmax(0, 1fr) auto;
+        row-gap: 4px;
+
+        .ai-chat-title-group {
+            grid-column-start: 1;
+            grid-column-end: -1;
+            grid-row: 1;
+            max-width: 100%;
+        }
+
+        .ai-chat-header-left,
+        .ai-chat-header-actions {
+            grid-row: 2;
+        }
+
+        .ai-chat-header-left {
+            grid-column: 1;
+        }
+
+        .ai-chat-header-actions {
+            grid-column: 2;
         }
     }
 }
@@ -470,13 +977,17 @@
         display: flex;
         align-items: center;
         gap: 6px;
+
+        .ai-dropdown-check {
+            flex: 0 0 11px;
+        }
     }
 
     .ai-permission-item-desc {
         display: block;
         font-size: @ai-text-meta;
         opacity: 0.7;
-        padding-left: 17px;
+        padding-left: 25px;
         line-height: @ai-line-compact;
     }
 }
@@ -516,13 +1027,12 @@
 
 /* ── Session history dropdown ──────────────────────────────────────── */
 /* When history is open, hide chat content and show the dropdown instead.
-   These live inside .ai-chat-body-chat now (not direct .ai-chat-panel
-   children), since that wrapper is what CLI mode toggles alongside it. */
+   The dropdown is a sibling of .ai-chat-body-chat (the wrapper CLI mode
+   toggles), and both are flex:1 — so the wrapper has to go out of the
+   layout entirely, not just have its children hidden, or it keeps
+   claiming half the panel height and the list stops halfway down. */
 .ai-chat-panel.ai-history-open {
-    .ai-chat-body-chat > .ai-chat-messages,
-    .ai-chat-body-chat > .ai-chat-status,
-    .ai-chat-body-chat > .ai-chat-input-area,
-    .ai-chat-body-chat > .ai-onboarding-wrap {
+    > .ai-chat-body-chat {
         display: none !important;
     }
 }
@@ -573,10 +1083,59 @@
         text-overflow: ellipsis;
     }
 
+    .ai-history-item-meta {
+        display: flex;
+        align-items: baseline;
+        gap: 5px;
+        min-width: 0;
+    }
+
     .ai-history-item-time {
         font-size: @ai-text-meta;
         color: @project-panel-text-2;
         opacity: 0.6;
+        flex-shrink: 0;
+    }
+
+    // The chat's tokens and cost, when it has had a turn.
+    .ai-history-item-usage {
+        font-size: @ai-text-meta;
+        color: @project-panel-text-2;
+        opacity: 0.6;
+        flex-shrink: 0;
+        white-space: nowrap;
+
+        &::before {
+            content: "·";
+            margin-right: 5px;
+        }
+    }
+
+    /* Claude's title for the session, revealed on hover: always-on it made
+       a 50-entry list too dense to scan. It keeps its space in the row while
+       hidden, so showing it shifts nothing. Empty when it would only repeat
+       the headline, and the separator hangs off the text so nothing is
+       drawn for those rows. */
+    .ai-history-item-subtext {
+        font-size: @ai-text-meta;
+        color: @project-panel-text-2;
+        // No transition: a fade here reads as lag when you are running the
+        // pointer down the list looking for a session.
+        opacity: 0;
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+
+        &:not(:empty)::before {
+            content: "·";
+            margin-right: 5px;
+        }
+    }
+
+    &:hover .ai-history-item-subtext {
+        opacity: 0.75;
     }
 
     .ai-history-item-delete {
@@ -642,219 +1201,1112 @@
     }
 }
 
-/* ── Onboarding iframe (guided AI starter) ──────────────────────────── */
-/* The wrap sits where .ai-chat-messages would. When visible it claims
-   the same flex slot — when hidden the chat takes that slot back. */
-.ai-onboarding-wrap {
+/* ── Start screen (empty chat) ──────────────────────────────────────── */
+/* Sits where .ai-chat-messages would. When visible it claims the same flex
+   slot — when hidden the chat takes that slot back. */
+@ai-start-accent:        #6b9eff;
+// A live session's dot: green, half-way to the secondary text grey, so it
+// is there when looked for without calling out.
+@ai-start-running:       #73b482;
+@ai-start-card-bg:       rgba(255, 255, 255, 0.04);
+@ai-start-card-bg-hover: rgba(255, 255, 255, 0.07);
+@ai-start-border:        rgba(255, 255, 255, 0.12);
+
+.ai-chat-start {
     flex: 1;
     min-height: 0;
     min-width: 0;
-    position: relative;
+    overflow-y: auto;
+    padding: 22px 16px 16px;
     background-color: @bc-ai-sidebar-bg;
+    color: @project-panel-text-1;
 
-    .ai-onboarding-frame {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        border: 0;
-        display: block;
-    }
-}
-
-/* Prompt confirm overlay — top-level rule (NOT nested under
-   .ai-onboarding-wrap) because at runtime _initOnboarding detaches
-   the overlay element and re-parents it to .ai-tab-container so it
-   covers the Files/AI tab strip in addition to the panel body.
-   Neutral dark-panel chrome — no blue accent. Title strip + full-
-   bleed textarea + bottom action row with Cancel and an icon-only
-   send button that mirrors .ai-send-btn's transparent quiet style. */
-.ai-onboarding-prompt-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 10;
-    background: rgba(0, 0, 0, 0.45);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    animation: ai-onboarding-overlay-fade 0.15s ease-out;
-
-    .ai-onboarding-prompt-card {
-        width: 100%;
-        max-width: 440px;
-        border: 1px solid @bc-ai-input-border;
-        border-radius: 8px;
-        background: @bc-ai-sidebar-bg;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-        animation: ai-onboarding-card-pop 0.18s ease-out;
-    }
-
-    .ai-onboarding-prompt-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 8px 8px 14px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    }
-
-    .ai-onboarding-prompt-title {
-        flex: 1;
-        min-width: 0;
-        font-size: @ai-text-body;
+    .ai-start-greeting {
+        font-size: 15px;
         font-weight: 600;
-        color: @project-panel-text-1;
-        line-height: 1.3;
+        color: @project-panel-text-2;
+        margin-bottom: 2px;
     }
 
-    .ai-onboarding-prompt-close {
-        background: none;
-        border: 0;
-        color: @project-panel-text-2;
-        width: 26px;
-        height: 26px;
-        border-radius: 4px;
-        cursor: pointer;
+    .ai-start-title {
+        font-size: 19px;
+        font-weight: 600;
+        line-height: 1.3;
+        margin: 0 0 18px;
+        color: @project-panel-text-1;
+    }
+
+    .ai-start-card,
+    .ai-start-row {
         display: flex;
         align-items: center;
-        justify-content: center;
-        opacity: 0.55;
-        flex-shrink: 0;
-        transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
-
-        i { font-size: 0.95em; }
-
-        &:hover {
-            opacity: 1;
-            color: @project-panel-text-1;
-            background: rgba(255, 255, 255, 0.05);
-        }
-    }
-
-    .ai-onboarding-prompt-text {
-        // display: block + width: 100% + box-sizing makes the textarea
-        // span the card's full inner width regardless of the rows attr
-        // or the browser's textarea default width.
-        display: block;
+        gap: 12px;
         width: 100%;
         box-sizing: border-box;
-        background: @bc-ai-input-bg;
-        border: 0;
-        border-radius: 0;
-        color: @project-panel-text-1;
+        text-align: left;
         font-size: @ai-text-body;
-        line-height: @ai-line-prose;
-        padding: 12px 14px;
-        resize: vertical;
-        min-height: 110px;
-        max-height: 260px;
-        outline: none;
-        box-shadow: none;
+        color: inherit;
+        background: @ai-start-card-bg;
+        border: 1px solid @ai-start-border;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 
-        // Phoenix's global textarea focus rule paints a border + shadow
-        // that shifts the dialog by ~2px and reads as a flicker. Force
-        // the no-chrome focus state so only the bg darkening signals
-        // focus.
-        &:focus,
+        &:hover {
+            background: @ai-start-card-bg-hover;
+        }
+
         &:focus-visible {
-            background: @bc-ai-input-bg-focused;
-            border: 0;
             outline: none;
-            box-shadow: none;
+            border-color: fade(@ai-start-accent, 50%);
         }
     }
 
-    .ai-onboarding-prompt-images {
+    .ai-start-card {
+        padding: 12px;
+    }
+
+    /* Surprise Me: a card whose head is the button. Once a demo has been
+       seen, clicking it opens a choice beneath: a live build, or another
+       demo. */
+    .ai-start-surprise {
+        display: block;
+        padding: 0;
+        cursor: default;
+
+        &.ai-start-surprise-open:hover {
+            background: @ai-start-card-bg;
+        }
+    }
+
+    .ai-start-surprise-row {
+        display: flex;
+        align-items: stretch;
+    }
+
+    .ai-start-surprise-head {
+        display: flex;
+        flex: 1;
+        min-width: 0;
+        align-items: center;
+        gap: 12px;
+        width: auto;
+        margin: 0;
+        padding: 12px;
+        box-sizing: border-box;
+        text-align: left;
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: 0;
+        border-radius: 8px 0 0 8px;
+        cursor: pointer;
+
+        &:focus-visible {
+            outline: none;
+            box-shadow: inset 0 0 0 1px fade(@ai-start-accent, 50%);
+        }
+    }
+
+    .ai-start-surprise-dismiss {
+        flex: 0 0 46px;
+        width: 46px;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        border: 0;
+        border-left: 1px solid fade(@project-panel-text-2, 18%);
+        border-radius: 0 8px 8px 0;
+        color: @project-panel-text-2;
+        font-size: @ai-text-body;
+        box-shadow: none;
+        text-shadow: none;
+        cursor: pointer;
+
+        &:hover {
+            color: @project-panel-text-1;
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        &:focus-visible {
+            outline: 1px solid @ai-start-accent;
+            outline-offset: -3px;
+        }
+    }
+
+    .ai-start-surprise-choice,
+    .ai-start-surprise-choice-desc {
+        display: none;
+    }
+
+    .ai-start-surprise-choice {
+        padding: 0 12px 12px;
+    }
+
+    .ai-start-surprise-open {
+        .ai-start-surprise-dismiss {
+            border-left: 0;
+        }
+
+        .ai-start-surprise-choice {
+            display: block;
+            animation: ai-start-choice-open 0.22s ease-out;
+        }
+
+        .ai-start-surprise-desc {
+            display: none;
+        }
+
+        .ai-start-surprise-choice-desc {
+            display: block;
+        }
+    }
+
+    .ai-start-surprise-actions {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
-        padding: 8px 12px;
-        border-top: 1px solid rgba(255, 255, 255, 0.06);
-        background: @bc-ai-input-bg;
+    }
 
-        .ai-image-thumb {
-            position: relative;
+    .ai-start-make-btn,
+    .ai-start-another-btn {
+        flex: 1 1 0;
+        min-width: 130px;
+        height: 30px;
+        margin: 0;
+        padding: 0 12px;
+        box-sizing: border-box;
+        border-radius: 6px;
+        font-size: @ai-text-secondary;
+        font-weight: 600;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease;
 
-            img {
-                display: block;
-                max-width: 64px;
-                max-height: 48px;
-                object-fit: cover;
-                border-radius: 4px;
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                cursor: pointer;
-            }
-
-            .ai-image-remove {
-                position: absolute;
-                top: -6px;
-                right: -6px;
-                width: 18px;
-                height: 18px;
-                border-radius: 50%;
-                background: rgba(0, 0, 0, 0.7);
-                border: 1px solid rgba(255, 255, 255, 0.3);
-                color: #fff;
-                font-size: 11px;
-                line-height: 1;
-                padding: 0;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-            }
+        i {
+            margin-right: 6px;
         }
     }
 
-    .ai-onboarding-prompt-actions {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 4px;
-        padding: 6px 8px 6px 12px;
-        border-top: 1px solid rgba(255, 255, 255, 0.06);
-    }
-
-    .ai-onboarding-prompt-cancel {
+    .ai-start-make-btn {
+        color: inherit;
         background: transparent;
-        border: 0;
-        color: @project-panel-text-2;
-        font-size: @ai-text-secondary;
-        line-height: @ai-line-compact;
-        padding: 6px 10px;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background-color 0.15s ease, color 0.15s ease;
+        border: 1px solid rgba(255, 255, 255, 0.16);
 
         &:hover {
-            background: rgba(255, 255, 255, 0.05);
-            color: @project-panel-text-1;
+            background: rgba(255, 255, 255, 0.06);
         }
     }
 
-    .ai-onboarding-prompt-send {
+    /* Free, so it is the default: primary, and on the right. */
+    .ai-start-another-btn {
+        color: #fff;
+        background: #0a6fd0;
+        border: 1px solid #0a6fd0;
+
+        &:hover {
+            background: #1a80e2;
+            border-color: #1a80e2;
+        }
+    }
+
+    .ai-start-surprise-note {
+        margin-top: 8px;
+        font-size: @ai-text-meta;
+        line-height: 1.4;
+        color: @project-panel-text-2;
+    }
+
+    .ai-start-row {
+        padding: 10px 12px;
+        margin-bottom: 6px;
+    }
+
+    .ai-start-row-active {
+        border-color: fade(@ai-start-accent, 40%);
+        background: fade(@ai-start-accent, 12%);
+
+        &:hover {
+            background: fade(@ai-start-accent, 16%);
+        }
+    }
+
+    /* Not installed: reads as an empty slot until set up. */
+    .ai-start-row-missing {
+        border-style: dashed;
+
+        .ai-start-name {
+            color: @project-panel-text-2;
+        }
+
+        .ai-start-setup {
+            display: inline;
+        }
+
+        .ai-start-go {
+            display: none;
+        }
+    }
+
+    /* A live session, to go back to: a green dot on its icon, where people
+       expect presence. Its status is said on hover or focus, and always to
+       screen readers. */
+    .ai-start-running {
+        display: none;
+        align-items: center;
+
+        &::before {
+            content: "·";
+            margin: 0 5px;
+            opacity: 0.7;
+        }
+    }
+
+    .ai-start-row-running,
+    &.ai-start-chat-running .ai-start-row[data-mode="chat"] {
+        .ai-start-icon::after {
+            content: "";
+            position: absolute;
+            right: -1px;
+            bottom: -1px;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: @ai-start-running;
+            // A ring in the card's own colour keeps the dot crisp on the icon.
+            box-shadow: 0 0 0 2px mix(#fff, @bc-ai-sidebar-bg, 4%);
+            transition: box-shadow 0.15s ease;
+        }
+
+        &:hover .ai-start-icon::after {
+            box-shadow: 0 0 0 2px mix(#fff, @bc-ai-sidebar-bg, 7%);
+        }
+
+        .ai-start-running {
+            display: inline-flex;
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+        }
+
+        &:hover .ai-start-running,
+        &:focus-visible .ai-start-running {
+            position: static;
+            width: auto;
+            height: auto;
+            margin: 0;
+            overflow: visible;
+            clip: auto;
+        }
+    }
+
+    /* Home over a chat that has started: the chat's card leads back to it,
+       with the same arrow as the CLIs. Demos start a separate chat. */
+    .ai-start-row[data-mode="chat"] .ai-start-go {
+        display: none;
+    }
+
+    &.ai-start-chat-running {
+        .ai-start-row[data-mode="chat"] {
+            .ai-start-check {
+                display: none;
+            }
+
+            .ai-start-go {
+                display: inline-block;
+            }
+
+            // Its card is tinted blue, and so is the dot's ring.
+            .ai-start-icon::after {
+                box-shadow: 0 0 0 2px mix(@ai-start-accent, @bc-ai-sidebar-bg, 12%);
+            }
+
+            &:hover .ai-start-icon::after {
+                box-shadow: 0 0 0 2px mix(@ai-start-accent, @bc-ai-sidebar-bg, 16%);
+            }
+        }
+    }
+
+    /* The CLI tools, side by side; they stack when the panel is narrow. */
+    .ai-start-cli-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 8px;
+        margin-bottom: 6px;
+
+        .ai-start-row {
+            gap: 10px;
+            min-width: 0;
+            margin-bottom: 0;
+            padding: 9px 10px;
+        }
+
+        // A status shown on hover must not make a card taller.
+        .ai-start-name,
+        .ai-start-desc {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    }
+
+    .ai-cli-session-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin: 0 0 8px;
+    }
+
+    .ai-cli-card {
+        position: relative;
+        min-width: 0;
+
+        .ai-start-row {
+            height: 100%;
+            padding-right: 36px;
+        }
+
+        .ai-cli-session-more {
+            position: absolute;
+            right: 6px;
+            top: 6px;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            font-size: 18px;
+            line-height: 24px;
+            color: @project-panel-text-2;
+            background: transparent;
+        }
+
+        &.ai-cli-card-missing {
+            .ai-start-row { padding-right: 10px; }
+            .ai-cli-session-more { display: none; }
+        }
+
+        input.ai-cli-session-name {
+            position: absolute;
+            box-sizing: border-box;
+            min-height: 20px;
+            margin: 0;
+            padding: 0 2px;
+            font: inherit;
+            font-weight: 600;
+            z-index: 1;
+        }
+
+        &.ai-cli-card-renaming .ai-start-name {
+            visibility: hidden;
+        }
+    }
+
+    /* Claude Code before it is signed in: Set up where the check mark was. */
+    .ai-start-chat-setup-btn {
+        display: none;
+        flex: 0 0 auto;
+        align-items: center;
+        height: 26px;
+        padding: 0 12px;
+        border-radius: 6px;
+        font-size: @ai-text-secondary;
+        font-weight: 600;
+        color: #fff;
+        background: #0a6fd0;
+        border: 1px solid #0a6fd0;
+        transition: background 0.15s ease, border-color 0.15s ease;
+
+        &:hover {
+            background: #1a80e2;
+            border-color: #1a80e2;
+        }
+    }
+
+    &.ai-start-chat-setup .ai-start-row[data-mode="chat"] {
+        .ai-start-check {
+            display: none;
+        }
+
+        .ai-start-chat-setup-btn {
+            display: inline-flex;
+        }
+    }
+
+    /* No CLI installed: the CLI rows fold into one quiet line until asked for. */
+    .ai-start-cli-toggle {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        margin: 6px 0 4px;
+        padding: 6px 2px;
         background: none;
         border: 0;
-        color: @project-panel-text-2;
-        width: 32px;
-        height: 28px;
-        border-radius: 4px;
+        text-align: left;
+        font-size: @ai-text-secondary;
+        color: fade(@project-panel-text-2, 80%);
         cursor: pointer;
+
+        &:hover {
+            color: @project-panel-text-1;
+        }
+
+        i {
+            width: 10px;
+            font-size: 10px;
+            transition: transform 0.15s ease;
+        }
+    }
+
+    &.ai-start-cli-foldable {
+        .ai-start-cli-toggle {
+            display: flex;
+        }
+
+        .ai-start-separator {
+            display: none;
+        }
+    }
+
+    &.ai-start-cli-folded .ai-start-cli-grid {
+        display: none;
+    }
+
+    &.ai-start-cli-foldable:not(.ai-start-cli-folded) .ai-start-cli-toggle i {
+        transform: rotate(90deg);
+    }
+
+    /* Compact layout, for people who are not new here: the modes lead and
+       the Surprise Me demo is a footer link instead of a hero card. */
+    .ai-start-footer.ai-start-demo {
+        display: none;
+        margin-top: 8px;
+    }
+
+    &.ai-start-compact {
+        .ai-start-surprise {
+            display: none;
+        }
+
+        .ai-start-footer.ai-start-demo {
+            display: flex;
+        }
+
+        /* The footer link opened the choice: it takes the link's place. */
+        &.ai-start-surprise-at-link {
+            .ai-start-surprise {
+                display: block;
+                margin-top: 8px;
+            }
+
+            .ai-start-footer.ai-start-demo {
+                display: none;
+            }
+        }
+
+        .ai-start-section {
+            margin-top: 4px;
+        }
+    }
+
+    .ai-start-icon {
+        position: relative;
+        flex: 0 0 28px;
+        height: 28px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.07);
         display: flex;
         align-items: center;
         justify-content: center;
-        opacity: 0.6;
-        transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+        font-size: 13px;
 
-        i { font-size: 0.95em; }
+        svg {
+            width: 15px;
+            height: 15px;
+        }
+    }
+
+    .ai-start-text {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .ai-start-name {
+        font-weight: 600;
+    }
+
+    .ai-start-desc {
+        font-size: @ai-text-secondary;
+        color: @project-panel-text-2;
+        margin-top: 1px;
+    }
+
+    .ai-start-chevron {
+        font-size: 11px;
+        color: fade(@project-panel-text-2, 60%);
+    }
+
+    .ai-start-check {
+        color: @ai-start-accent;
+    }
+
+    /* Installed CLI, or the chat under home: an arrow that steps forward on hover. */
+    .ai-start-go {
+        font-size: 11px;
+        color: @project-panel-text-2;
+        opacity: 0.55;
+        transition: transform 0.15s ease, opacity 0.15s ease, color 0.15s ease;
+    }
+
+    .ai-start-row:hover .ai-start-go,
+    .ai-start-row:focus-visible .ai-start-go {
+        color: @ai-start-accent;
+        opacity: 1;
+        transform: translateX(2px);
+    }
+
+    .ai-start-setup {
+        display: none;
+        font-size: @ai-text-secondary;
+        font-weight: 600;
+        color: @ai-start-accent;
+        white-space: nowrap;
+
+        i {
+            font-size: 10px;
+            margin-left: 2px;
+        }
+    }
+
+    .ai-start-section {
+        font-size: @ai-text-meta;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: fade(@project-panel-text-2, 70%);
+        margin: 22px 0 8px;
+    }
+
+    .ai-start-separator {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 12px 0 10px;
+        font-size: @ai-text-meta;
+        color: fade(@project-panel-text-2, 70%);
+
+        &::before,
+        &::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: @ai-start-border;
+        }
+    }
+
+    .ai-start-footer {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-top: 16px;
+        font-size: @ai-text-secondary;
+        line-height: 1.5;
+        color: fade(@project-panel-text-2, 75%);
+
+        i {
+            font-size: 11px;
+            opacity: 0.8;
+        }
+
+        a {
+            color: @ai-start-accent;
+            cursor: pointer;
+        }
+    }
+}
+
+/* Preview a recorded build before signing in. */
+.ai-see-demo-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 12px;
+    padding: 12px;
+    text-align: left;
+    font-size: @ai-text-body;
+    color: @project-panel-text-1;
+    background: @ai-start-card-bg;
+    border: 1px solid @ai-start-border;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+
+    &:hover {
+        background: @ai-start-card-bg-hover;
+    }
+
+    .ai-see-demo-icon {
+        flex: 0 0 28px;
+        height: 28px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.07);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+    }
+
+    .ai-see-demo-text {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .ai-see-demo-name {
+        font-weight: 600;
+    }
+
+    .ai-see-demo-desc {
+        font-size: @ai-text-secondary;
+        color: @project-panel-text-2;
+        margin-top: 1px;
+    }
+}
+
+/* Demo mode: the chat UI shown to someone signed out, to watch a recorded
+   build. The input area stays on show but inert, so the demo looks like the
+   panel they would get; the bar under it holds what can actually be done. */
+.ai-demo-bar {
+    display: none;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: @ai-text-secondary;
+    color: @project-panel-text-2;
+
+    .ai-demo-bar-text {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .ai-demo-bar-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+        margin-left: auto;
+    }
+
+    button {
+        height: 28px;
+        margin: 0;
+        padding: 0 12px;
+        box-sizing: border-box;
+        border-radius: 6px;
+        font-size: @ai-text-secondary;
+        font-weight: 600;
+        line-height: 1;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+
+    .ai-demo-back-btn {
+        color: @project-panel-text-1;
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.16);
 
         &:hover {
-            opacity: 1;
-            color: @project-panel-text-1;
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.06);
+        }
+    }
+
+    .ai-demo-signin-btn {
+        color: #fff;
+        background: #0a6fd0;
+        border: 1px solid #0a6fd0;
+
+        &:hover {
+            background: #1a80e2;
+            border-color: #1a80e2;
+        }
+    }
+
+    /* Only while a demo plays, in the text's place. Shows the pace, and
+       steps it up on each click. */
+    .ai-demo-ff-btn {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        /* Room for "32×", so the button does not change width as it steps. */
+        min-width: 72px;
+        color: @ai-start-accent;
+        background: fade(@ai-start-accent, 10%);
+        border: 1px solid fade(@ai-start-accent, 45%);
+        font-variant-numeric: tabular-nums;
+
+        &:hover {
+            background: fade(@ai-start-accent, 18%);
+        }
+
+        &:active {
+            background: fade(@ai-start-accent, 28%);
+        }
+    }
+}
+
+/* What a demo ends on: the model that built it, and the way to another. */
+.ai-demo-end {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 6px;
+    padding: 16px 14px;
+    text-align: center;
+    border: 1px solid fade(@ai-start-accent, 35%);
+    border-radius: 10px;
+    background: fade(@ai-start-accent, 7%);
+
+    .ai-demo-end-title {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: @ai-text-body;
+        font-weight: 600;
+        color: @project-panel-text-1;
+    }
+
+    .ai-demo-end-icon {
+        display: inline-flex;
+        color: @ai-start-accent;
+
+        svg {
+            width: 16px;
+            height: 16px;
+        }
+    }
+
+    /* Signed out: what the demo was for. */
+    .ai-demo-end-cta {
+        margin-top: 2px;
+        font-size: @ai-text-body;
+        color: @project-panel-text-1;
+    }
+
+    .ai-demo-end-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 4px;
+    }
+
+    .ai-demo-end-signin-btn,
+    .ai-demo-new-btn,
+    .ai-demo-another-btn,
+    .ai-demo-reveal-btn,
+    .ai-demo-copy-btn {
+        height: 30px;
+        padding: 0 16px;
+        border-radius: 6px;
+        font-size: @ai-text-secondary;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    /* One primary action, on the right: signing in, or a chat of one's own. */
+    .ai-demo-end-signin-btn,
+    .ai-demo-new-btn {
+        color: #fff;
+        background: #0a6fd0;
+        border: 1px solid #0a6fd0;
+
+        &:hover {
+            background: #1a80e2;
+            border-color: #1a80e2;
+        }
+
+        i {
+            margin-right: 6px;
+        }
+    }
+
+    .ai-demo-another-btn,
+    .ai-demo-reveal-btn,
+    .ai-demo-copy-btn {
+        color: @project-panel-text-1;
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+
+        &:hover {
+            background: rgba(255, 255, 255, 0.06);
+        }
+    }
+
+    /* The reveal: the prompt behind the build, as sent. Long, so it scrolls. */
+    .ai-demo-prompt {
+        align-self: stretch;
+        margin-top: 6px;
+        text-align: left;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.22);
+        overflow: hidden;
+    }
+
+    .ai-demo-prompt-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 6px 6px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: @ai-text-meta;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: @project-panel-text-2;
+
+        .ai-demo-copy-btn {
+            height: 22px;
+            padding: 0 9px;
+            font-size: @ai-text-meta;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+    }
+
+    .ai-demo-prompt-text {
+        margin: 0;
+        padding: 10px;
+        max-height: 260px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        white-space: pre-wrap;
+        word-break: break-word;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        font-family: 'SourceCodePro-Medium', 'SourceCodePro', monospace;
+        font-size: @ai-text-secondary;
+        line-height: 1.5;
+        color: @project-panel-text-1;
+        -webkit-user-select: text;
+        user-select: text;
+    }
+}
+
+/* The chat's controls on show, not in use. Stop stays live: it ends the replay. */
+.ai-demo-controls-off() {
+    .ai-chat-input-area {
+        pointer-events: none;
+
+        .ai-chat-context-bar,
+        .ai-chat-mode-row,
+        .ai-chat-input-wrap > *:not(.ai-stop-btn) {
+            opacity: 0.5;
+        }
+
+        .ai-stop-btn {
+            pointer-events: auto;
+        }
+    }
+
+    .ai-back-btn,
+    .ai-model-select,
+    .ai-chat-header-actions {
+        visibility: hidden;
+    }
+
+    .ai-chat-title-group {
+        pointer-events: none;
+
+        .ai-chat-title-chevron {
+            display: none;
+        }
+    }
+}
+
+/* A recorded demo playing looks the same signed in or out: the bar with its
+   pace and the way back, and the chat's controls on show only. */
+.ai-chat-panel.ai-demo-playing {
+    .ai-demo-controls-off();
+
+    .ai-demo-bar {
+        display: flex;
+    }
+
+    .ai-demo-ff-btn {
+        display: inline-flex;
+    }
+
+    .ai-demo-bar-text {
+        display: none;
+    }
+
+    /* Signed in, there is nothing to sign in to. */
+    &:not(.ai-demo-mode) .ai-demo-signin-btn {
+        display: none;
+    }
+}
+
+/* Signed out, the panel is only ever a demo. */
+.ai-chat-panel.ai-demo-mode {
+    .ai-demo-controls-off();
+
+    .ai-demo-bar {
+        display: flex;
+    }
+
+    /* The ending card makes the sign-in offer, and has the way to another
+       demo: nothing is left for the bar to do. */
+    &.ai-demo-ended .ai-demo-bar {
+        display: none;
+    }
+
+    .ai-chat-start,
+    .ai-chat-quota-bar {
+        display: none !important;
+    }
+}
+
+/* Surprise Me's label in flight to the footer link that takes its place.
+   Top level: it is appended to <body>. */
+.ai-start-fly {
+    position: fixed;
+    z-index: 2000;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    pointer-events: none;
+    font-size: @ai-text-body;
+    font-weight: 600;
+    color: @project-panel-text-1;
+    background: #2f3b52;
+    border: 1px solid fade(@ai-start-accent, 60%);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+
+    .ai-start-fly-icon {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        font-size: 13px;
+
+        svg {
+            width: 15px;
+            height: 15px;
+        }
+    }
+}
+
+/* The Surprise Me choice, opening beneath the card. */
+@keyframes ai-start-choice-open {
+    from {
+        opacity: 0.4;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-chat-start .ai-start-surprise-open .ai-start-surprise-choice {
+        animation: none;
+    }
+}
+
+/* Where the built-in chat picked on the start screen is typed into. Shadow
+   only: the input keeps its own background, and the ring stays narrow
+   because the panel edge is close by. */
+@keyframes ai-input-pulse {
+    0% {
+        box-shadow: 0 0 0 0 fade(@ai-start-accent, 65%);
+        border-color: fade(@ai-start-accent, 70%);
+    }
+    100% {
+        box-shadow: 0 0 0 7px fade(@ai-start-accent, 0%);
+        border-color: fade(@ai-start-accent, 70%);
+    }
+}
+
+.ai-chat-input-area .ai-chat-input-wrap,
+#phoenix-live-preview-chat .lp-ai-composer {
+    &.ai-pulse {
+        animation: ai-input-pulse 600ms ease-out 1;
+    }
+
+    &.ai-pulse-double {
+        animation: ai-input-pulse 700ms ease-out 2;
+    }
+}
+
+/* A pointer to part of the panel. Top level: appended to <body>. Sits under
+   its anchor pointing up, or over it pointing down (-above). */
+.ai-panel-hint {
+    position: fixed;
+    z-index: 1999;
+    transform: translateX(-50%);
+    margin-top: 6px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    white-space: nowrap;
+    pointer-events: none;
+    font-size: @ai-text-secondary;
+    font-weight: 600;
+    color: #fff;
+    background: #2f6fed;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    transition: opacity 0.2s ease, margin-top 0.2s ease;
+
+    &.ai-panel-hint-in {
+        opacity: 1;
+        margin-top: 0;
+    }
+
+    &::before {
+        content: "";
+        position: absolute;
+        top: -5px;
+        left: 50%;
+        margin-left: -5px;
+        border: 5px solid transparent;
+        border-top: 0;
+        border-bottom-color: #2f6fed;
+    }
+
+    &.ai-panel-hint-above {
+        transform: translate(-50%, -100%);
+        margin-top: -6px;
+
+        &.ai-panel-hint-in {
+            margin-top: 0;
+        }
+
+        &::before {
+            top: auto;
+            bottom: -5px;
+            border: 5px solid transparent;
+            border-bottom: 0;
+            border-top-color: #2f6fed;
         }
     }
 }
@@ -873,6 +2325,34 @@
     background-color: @bc-ai-sidebar-bg;
 }
 
+// Floating "scroll to bottom" control over the lower right of the message
+// list; shown by AIChatPanel._updateScrollToBottomBtn while the list is
+// scrolled away from its end (top is set from the list's bottom edge).
+.ai-scroll-to-bottom-btn {
+    position: absolute;
+    right: 18px;
+    z-index: 5;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background-color: #3a3a3a;
+    color: @project-panel-text-1;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: @ai-text-secondary;
+    opacity: 0.9;
+
+    &:hover {
+        opacity: 1;
+        background-color: #454545;
+    }
+}
+
 /* ── Individual messages ────────────────────────────────────────────── */
 .ai-msg {
     margin-bottom: 16px;
@@ -882,6 +2362,15 @@
     // it was `display: none` otherwise costs ~750ms of synchronous reflow.
     content-visibility: auto;
     contain-intrinsic-size: auto 300px;
+
+    // A message appended at the bottom is laid out as the 300px placeholder
+    // for one frame before it renders, which makes a bottom-pinned list
+    // jolt on every new card or bubble. The newest messages are on screen
+    // anyway, so render them normally; once older, they carry a remembered
+    // size and switch to `auto` without a size change.
+    &:nth-last-child(-n + 5) {
+        content-visibility: visible;
+    }
 
     .ai-msg-label {
         font-size: @ai-text-meta;
@@ -966,29 +2455,7 @@
         border-radius: 4px;
         border: 1px solid rgba(255, 255, 255, 0.1);
         cursor: pointer;
-    }
-}
-
-/* ── Image lightbox overlay ────────────────────────────────────────── */
-.ai-image-lightbox {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 100;
-    background: rgba(0, 0, 0, 0.8);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-
-    img {
-        max-width: 90%;
-        max-height: 90%;
-        object-fit: contain;
-        border-radius: 6px;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+        .ai-transparency-backdrop(5px);
     }
 }
 
@@ -1025,6 +2492,10 @@
             font-weight: 600;
         }
 
+        a {
+            color: #6b9eff;
+        }
+
         code {
             background-color: rgba(255, 255, 255, 0.08);
             color: @project-panel-text-1;
@@ -1032,6 +2503,10 @@
             border-radius: 3px;
             font-size: @sidebar-md-code-font-size;
             font-family: 'SourceCodePro-Medium', 'SourceCodePro', monospace;
+            // Bootstrap's base `code { white-space: nowrap }` targets the
+            // element directly, so a long inline path or identifier ran off
+            // the panel edge instead of wrapping with the surrounding prose.
+            white-space: pre-wrap;
         }
 
         pre {
@@ -1090,7 +2565,7 @@
             color: @project-panel-text-2;
         }
 
-        h1, h2, h3, h4 {
+        h1, h2, h3, h4, h5, h6 {
             color: @project-panel-text-1;
             line-height: 1.25em;
         }
@@ -1203,6 +2678,33 @@
         padding: 2px 10px 6px 28px;
     }
 
+    // Text detail (command, path, code lines) only — task lists and subagent
+    // step lists share .ai-tool-detail but always show in full.
+    .ai-tool-detail.ai-tool-detail-lines {
+        // A long command or script must not turn the card into a wall of
+        // text: cap the detail at roughly nine lines and scroll inside it.
+        max-height: 160px;
+        overflow-y: auto;
+        overflow-x: hidden;
+
+        // The global scrollbar theme paints the thumb only while hovering
+        // the scrolling element itself, which hides the fact that there is
+        // more text below the cap. Show it while the pointer is anywhere
+        // over the AI panel instead.
+        &::-webkit-scrollbar {
+            background-color: transparent;
+        }
+        .ai-chat-panel:hover &::-webkit-scrollbar-thumb {
+            border-radius: 999px;
+            background-color: rgba(255, 255, 255, 0.28);
+            background-clip: padding-box;
+            border: 2px solid transparent;
+        }
+        .ai-chat-panel:hover &::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(255, 255, 255, 0.45);
+        }
+    }
+
     .ai-tool-screenshot {
         max-width: 100%;
         border-radius: 4px;
@@ -1222,6 +2724,27 @@
         line-height: @ai-line-compact;
         white-space: normal;
         word-break: break-all;
+    }
+
+    // Restored cards keep only the beginning of a long detail; this note
+    // sits under the kept text so the cut is unmistakable.
+    .ai-tool-detail-truncated {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 4px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: @ai-text-meta;
+        font-style: italic;
+        color: #e8a838;
+        background-color: rgba(232, 168, 56, 0.08);
+        border: 1px dashed rgba(232, 168, 56, 0.45);
+        line-height: @ai-line-compact;
+
+        i {
+            flex-shrink: 0;
+        }
     }
 
     .ai-tool-preview {
@@ -1258,6 +2781,21 @@
     // Expand chevron hint
     &.ai-tool-done .ai-tool-header:hover .ai-tool-label {
         opacity: 1;
+    }
+
+    // Copy button at the right edge of the header row, identical to the
+    // markdown code block one (icon + "Copy", "Copied!" with a tick); copies
+    // the card's detail lines. Only present while the card is expanded:
+    // there is nothing to copy from a card whose detail is hidden.
+    .ai-tool-header .ai-tool-copy-btn {
+        display: none;
+        margin-left: auto;
+        flex-shrink: 0;
+        transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    &.ai-tool-expanded .ai-tool-header .ai-tool-copy-btn {
+        display: inline-block;
     }
 
     // Inline edit actions (diff toggle) — sits at the right edge of the
@@ -1418,6 +2956,340 @@
         color: @project-panel-text-2;
         opacity: 0.5;
         margin-left: auto;
+    }
+}
+
+/* ── Failed tool call ──────────────────────────────────────────────── */
+// A card whose call returned an error: red accent and a "failed" note at
+// the right of its header. Set by AIToolGroup.markCardFailed, live and on
+// restore; the pile header counts these.
+.ai-msg-tool.ai-tool-failed {
+    border-left-color: #e57373;
+
+    .ai-tool-copy-btn + .ai-tool-failed-tag {
+        margin-left: 6px;
+    }
+
+    .ai-tool-failed-tag {
+        margin-left: auto;
+        flex-shrink: 0;
+        font-size: @ai-text-meta;
+        line-height: 1;
+        padding: 2px 6px;
+        border-radius: 8px;
+        color: #e57373;
+        border: 1px solid rgba(229, 115, 115, 0.45);
+        background-color: rgba(229, 115, 115, 0.08);
+    }
+}
+
+/* ── Collapsed run of finished tool cards ──────────────────────────── */
+// A long run of finished tool cards (e.g. 20 "Ran command" rows) folds into
+// one of these; see core-ai/AIToolGroup.js. Collapsed, it is drawn as a
+// stack of cards: the header card on top with two offset card edges
+// peeking out below it, so the pile reads as "several cards" at a glance.
+// The header shows the distinct tool icons and the step count, and expands
+// to the original cards on click.
+@ai-tool-group-stack-step: 3px;
+
+.ai-tool-group {
+    position: relative;
+    margin-bottom: 6px;
+    // room for the two stacked card edges below the header
+    padding-bottom: (@ai-tool-group-stack-step * 2);
+
+    .ai-tool-group-header {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-wrap: wrap; // the read-files abstract wraps onto its own line
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        cursor: pointer;
+        border-radius: 4px;
+        background-color: @bc-ai-sidebar-bg;
+        background-image: linear-gradient(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.035));
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-left: 2px solid var(--tool-color, @project-panel-text-2);
+        min-width: 0;
+
+        &:hover .ai-tool-group-label {
+            opacity: 1;
+        }
+    }
+
+    // The two card edges "behind" the header. Each is narrower and lower
+    // than the one above it, like a fanned pile of cards.
+    &::before,
+    &::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 10px;
+        border-radius: 0 0 4px 4px;
+        background-color: @bc-ai-sidebar-bg;
+        background-image: linear-gradient(rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.02));
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-top: none;
+        pointer-events: none;
+    }
+
+    &::before {
+        z-index: 1;
+        left: 4px;
+        right: 4px;
+        bottom: @ai-tool-group-stack-step;
+    }
+
+    &::after {
+        z-index: 0;
+        left: 8px;
+        right: 8px;
+        bottom: 0;
+    }
+
+    .ai-tool-group-chevron {
+        width: 14px;
+        text-align: center;
+        flex-shrink: 0;
+        font-size: @ai-text-meta;
+        color: @project-panel-text-2;
+        opacity: 0.6;
+        transition: transform 0.15s ease;
+    }
+
+    .ai-tool-group-icons {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+
+    .ai-tool-group-icon {
+        font-size: @ai-text-secondary;
+        width: 14px;
+        text-align: center;
+    }
+
+    .ai-tool-group-label {
+        font-size: @ai-text-body;
+        color: @project-panel-text-2;
+        opacity: 0.75;
+        line-height: @ai-line-compact;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+    }
+
+    // "N failed" note before the count pill, only when a collated tool call
+    // returned an error.
+    .ai-tool-group-failed {
+        margin-left: auto;
+        flex-shrink: 0;
+        font-size: @ai-text-meta;
+        color: #e57373;
+        opacity: 0.9;
+        white-space: nowrap;
+    }
+
+    .ai-tool-group-body {
+        display: none;
+        margin-top: 4px;
+        padding-left: 8px;
+        border-left: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    // The lines under the pile header that name the files the folded cards
+    // touched ("Read ...", "Edited ..."): a label column (tool icon + verb)
+    // shared by both lines so their file lists start at the same x, then the
+    // names styled as the file tree shows them. Hidden while the pile is
+    // expanded, since the cards themselves show.
+    .ai-tool-group-summaries {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        column-gap: 10px;
+        row-gap: 2px;
+        align-items: baseline;
+        flex-basis: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        margin-top: -2px;
+        padding-left: 20px; // under the label, past the chevron column
+        font-size: @ai-text-secondary; // the file-path tier: these lines exist to name files
+        line-height: @ai-line-compact;
+        color: @project-panel-text-2; // the label, and "+N more" / "Show less"
+    }
+
+    .ai-tool-group-summary {
+        display: contents; // its label and list are the grid's two cells
+    }
+
+    .ai-tool-group-summary-label {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 6px;
+        white-space: nowrap;
+    }
+
+    .ai-tool-group-summary-icon {
+        width: 13px;
+        text-align: center;
+        font-size: @ai-text-meta;
+    }
+
+    .ai-tool-group-summary-list {
+        display: flex;
+        align-items: baseline;
+        min-width: 0;
+    }
+
+    .ai-tool-group-summary-names {
+        flex: 0 1 auto;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis; // only when even the first name alone is too long
+    }
+
+    .ai-tool-group-summary-file {
+        cursor: pointer;
+
+        // spacing before each name rather than after, so the last one shown
+        // leaves no trailing gap that would overflow the line
+        & + .ai-tool-group-summary-file {
+            margin-left: 10px;
+        }
+
+        &.ai-tool-group-summary-file-overflow {
+            display: none;
+        }
+
+        // the file tree's icon, at this line's size. Its line height is
+        // pinned so icon fonts with tall glyph boxes (the JSON icon) do not
+        // push their row apart when the list wraps.
+        .bd-icon,
+        .bd-icon i {
+            line-height: 1;
+        }
+
+        .bd-icon {
+            font-size: @ai-text-secondary;
+            width: auto;
+            padding-right: 0;
+            margin-right: 4px;
+            vertical-align: -1px;
+        }
+
+        &:hover .ai-tool-group-summary-file-name {
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+    }
+
+    .ai-tool-group-summary-file-base {
+        color: @project-panel-text-1;
+    }
+
+    .ai-tool-group-summary-file-ext {
+        color: @project-panel-text-2;
+    }
+
+    .ai-tool-group-summary-more {
+        flex: none;
+        margin-left: 8px;
+        white-space: nowrap;
+        cursor: pointer;
+
+        &:hover {
+            color: @project-panel-text-1;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+    }
+
+    // "+N more" clicked: every name, wrapping under the list column, with
+    // "Show less" flowing after the last one.
+    .ai-tool-group-summary-open {
+        .ai-tool-group-summary-list {
+            flex-wrap: wrap;
+            gap: 3px 10px;
+        }
+
+        .ai-tool-group-summary-names {
+            display: contents;
+        }
+
+        .ai-tool-group-summary-file {
+            white-space: nowrap;
+        }
+
+        .ai-tool-group-summary-file + .ai-tool-group-summary-file,
+        .ai-tool-group-summary-more {
+            margin-left: 0;
+        }
+    }
+
+    &.ai-tool-group-expanded .ai-tool-group-summaries {
+        display: none;
+    }
+
+    // Label bump when a card lands in the pile.
+    .ai-tool-group-label.ai-tool-group-label-bump {
+        animation: ai-tool-group-label-bump 0.3s ease-out;
+        transform-origin: left center;
+    }
+
+    &.ai-tool-group-expanded {
+        padding-bottom: 0;
+
+        &::before,
+        &::after {
+            display: none;
+        }
+
+        .ai-tool-group-chevron {
+            transform: rotate(90deg);
+        }
+
+        .ai-tool-group-body {
+            display: block;
+        }
+    }
+}
+
+@keyframes ai-tool-group-label-bump {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.12); }
+    100% { transform: scale(1); }
+}
+
+// A finished card being collated into the pile above it. The real card is
+// moved into the (hidden) group body at once; this floating copy is laid
+// over its old spot and flies up into the pile header, shrinking and fading.
+// The copies live in a fixed overlay over the messages container, outside
+// the scroll container, so they never touch its scroll height. Duration
+// must match FOLD_ANIMATION_MS in core-ai/AIToolGroup.js.
+.ai-tool-group-ghost-layer {
+    position: fixed;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.ai-msg-tool.ai-tool-group-ghost {
+    position: absolute;
+    margin: 0;
+    overflow: hidden;
+    transform-origin: top center;
+    will-change: transform, opacity;
+    transition: transform 0.28s ease-in, opacity 0.28s ease-in;
+
+    &.ai-tool-group-ghost-active {
+        transform: translateY(var(--ghost-dy, -40px)) scale(0.94, 0.15);
+        opacity: 0;
     }
 }
 
@@ -1839,6 +3711,98 @@
     }
 }
 
+.ai-question-reminder {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) 24px;
+    gap: 4px 8px;
+    box-sizing: border-box;
+    margin-bottom: 8px;
+    padding: 12px;
+    background: rgba(213, 173, 91, 0.12);
+    border: 1px solid rgba(213, 173, 91, 0.35);
+    border-left: 3px solid #cba257;
+    border-radius: 5px;
+    color: @project-panel-text-1;
+    font-size: @ai-text-body;
+    line-height: 20px;
+    white-space: normal;
+
+    &[hidden] { display: none; }
+
+    .ai-question-reminder-icon {
+        grid-column: 1;
+        grid-row: 1;
+        align-self: center;
+        color: #dfb86d;
+    }
+
+    .ai-question-reminder-title {
+        grid-column: 2;
+        grid-row: 1;
+        align-self: center;
+        min-width: 0;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+
+    .ai-question-reminder-detail {
+        grid-column: ~"2 / 4";
+        grid-row: 2;
+        min-width: 0;
+        font-size: @ai-dialog-note;
+        line-height: 18px;
+        color: @project-panel-text-2;
+        overflow-wrap: anywhere;
+    }
+
+    button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        font: inherit;
+        border-radius: 3px;
+        cursor: pointer;
+
+        &:focus-visible {
+            outline: 1px solid @bc-btn-border-focused;
+            outline-offset: 2px;
+        }
+    }
+
+    .ai-question-reminder-close {
+        grid-column: 3;
+        grid-row: 1;
+        width: 24px;
+        height: 24px;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        border: 0;
+        color: @project-panel-text-2;
+
+        &:hover { background: rgba(213, 173, 91, 0.19); }
+    }
+
+    .ai-question-reminder-show {
+        grid-column: ~"2 / 4";
+        grid-row: 3;
+        justify-self: end;
+        min-height: 28px;
+        margin-top: 6px;
+        padding: 3px 10px;
+        border: 1px solid rgba(213, 173, 91, 0.38);
+        background: rgba(213, 173, 91, 0.08);
+        color: @project-panel-text-1;
+        font-size: @ai-dialog-note;
+
+        &:hover {
+            background: rgba(213, 173, 91, 0.19);
+            border-color: rgba(213, 173, 91, 0.6);
+        }
+    }
+}
+
 .ai-question-other {
     display: flex;
     align-items: stretch;
@@ -2062,6 +4026,18 @@
             overflow-y: auto;
             padding: 22px 28px;
         }
+
+        // Approve footer (live plans only) stays pinned below the
+        // scrolling body, with the primary action on the right.
+        .ai-plan-actions,
+        .ai-plan-feedback {
+            flex-shrink: 0;
+        }
+
+        .ai-plan-actions {
+            justify-content: flex-end;
+        }
+
     }
 
     .ai-plan-fullscreen-close {
@@ -2103,7 +4079,7 @@
 
     // Heading top margin needs to be larger than paragraph margin so a
     // section header reads as a section header rather than another bullet.
-    h1, h2, h3, h4 {
+    h1, h2, h3, h4, h5, h6 {
         color: @project-panel-text-1;
         line-height: 1.25em;
     }
@@ -2143,6 +4119,7 @@
         border-radius: 3px;
         font-size: @sidebar-md-code-font-size;
         font-family: 'SourceCodePro-Medium', 'SourceCodePro', monospace;
+        white-space: pre-wrap; // see .ai-msg-content code
     }
 
     pre {
@@ -2190,6 +4167,7 @@
 
 .ai-plan-actions {
     display: flex;
+    justify-content: flex-end;
     gap: 8px;
     padding: 8px 12px;
     border-top: 1px solid rgba(107, 158, 255, 0.1);
@@ -2329,6 +4307,17 @@
 
     .ai-bash-confirm-body {
         padding: 10px 12px;
+
+        .ai-bash-confirm-summary {
+            color: #e0e0e0;
+            font-size: @ai-text-secondary;
+            line-height: @ai-line-prose;
+            margin-bottom: 6px;
+
+            &:last-child {
+                margin-bottom: 0;
+            }
+        }
 
         pre {
             margin: 0;
@@ -2534,6 +4523,7 @@
             object-fit: cover;
             border-radius: 3px;
             border: 1px solid rgba(255, 255, 255, 0.1);
+            .ai-transparency-backdrop(4px);
         }
     }
 
@@ -2677,22 +4667,7 @@
     padding: 6px 8px 8px 8px;
 
     .ai-chat-input-wrap {
-        display: flex;
-        align-items: flex-end;
-        background-color: @bc-ai-input-bg;
-        border: 1px solid @bc-ai-input-border;
-        border-radius: 8px;
-        transition: border-color 0.15s ease;
-        overflow: hidden;
-
-        &:focus-within {
-            background-color: @bc-ai-input-bg-focused;
-            border-color: @bc-ai-input-border-focus;
-        }
-
-        &.disabled {
-            opacity: 0.5;
-        }
+        .ai-composer-wrap();
     }
 
     .ai-chat-mode-row {
@@ -2791,6 +4766,218 @@
         to { opacity: 1; }
     }
 
+    /* ── Usage chip: tokens and cost of the chat, with a drop-up for the split ───── */
+    .ai-chat-mode-row {
+        position: relative;
+
+        .ai-usage-chip {
+            position: relative;
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            height: 22px;
+            padding: 0 6px;
+            border-radius: 4px;
+            font-size: @ai-text-meta;
+            color: @project-panel-text-2;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+
+            &:hover, &.ai-usage-open {
+                background: rgba(255, 255, 255, 0.04);
+                color: @project-panel-text-1;
+            }
+
+            > i {
+                width: 14px;
+                text-align: center;
+                font-size: 10px;
+                opacity: 0.75;
+            }
+
+            .ai-usage-caret {
+                width: auto;
+                font-size: 9px;
+                opacity: 0.6;
+            }
+
+            // Dim the chip's own text and icon before any turn; never the chip itself, since an
+            // opacity on the container would fade the drop-up inside it as well.
+            &.ai-usage-empty > i,
+            &.ai-usage-empty > .ai-usage-chip-text {
+                opacity: 0.6;
+            }
+        }
+
+        // The drop-up borrows the attach menu's surface.
+        .ai-usage-pop {
+            display: none;
+            position: absolute;
+            right: 0;
+            bottom: ~"calc(100% + 6px)";
+            min-width: 230px;
+            padding: 4px 0;
+            background: @bc-ai-input-bg;
+            border: 1px solid @bc-ai-input-border;
+            border-radius: 8px;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            text-align: left;
+            font-size: @ai-text-meta;
+            color: @project-panel-text-1;
+            cursor: default;
+            white-space: nowrap;
+        }
+
+        .ai-usage-chip.ai-usage-open .ai-usage-pop {
+            display: block;
+        }
+
+        .ai-usage-tabs {
+            display: flex;
+            gap: 2px;
+            padding: 6px 8px 5px;
+            border-bottom: 1px solid @bc-ai-input-border;
+            margin-bottom: 2px;
+        }
+
+        .ai-usage-tab {
+            padding: 4px 9px;
+            border-radius: 4px;
+            font-size: @ai-text-secondary;
+            color: @project-panel-text-2;
+            cursor: pointer;
+
+            &:hover {
+                background: rgba(255, 255, 255, 0.04);
+            }
+
+            &.active {
+                background: rgba(255, 255, 255, 0.08);
+                color: @project-panel-text-1;
+            }
+
+            &.ai-usage-tab-options {
+                margin-left: auto;
+
+                i {
+                    font-size: 11px;
+                }
+            }
+        }
+
+        .ai-usage-pane {
+            display: none;
+            flex-direction: column;
+            min-height: var(--ai-usage-pane-height);
+
+            &.active {
+                display: flex;
+            }
+        }
+
+        .ai-usage-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 5px 12px;
+
+            span:last-child {
+                font-variant-numeric: tabular-nums;
+            }
+
+            &.ai-usage-total {
+                border-top: 1px solid @bc-ai-input-border;
+                margin-top: 2px;
+                padding-top: 6px;
+            }
+        }
+
+        .ai-usage-note {
+            position: relative;
+            margin-top: auto;
+            padding: 4px 12px 6px;
+            color: @project-panel-text-2;
+            white-space: normal;
+            max-width: 270px;
+
+            &:hover .ai-usage-note-tip,
+            &:focus-within .ai-usage-note-tip {
+                display: block;
+            }
+        }
+
+        .ai-usage-note-trigger {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            padding: 0;
+            border: 0;
+            border-radius: 2px;
+            background: none;
+            box-shadow: none;
+            color: inherit;
+            font: inherit;
+            text-align: left;
+            cursor: help;
+
+            span {
+                text-decoration: underline dotted;
+                text-underline-offset: 3px;
+            }
+
+            &:focus-visible {
+                outline: 1px solid @project-panel-text-1;
+                outline-offset: 3px;
+            }
+        }
+
+        .ai-usage-note-tip {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 8px;
+            right: 8px;
+            margin-bottom: 6px;
+            padding: 10px 12px;
+            background: @bc-ai-sidebar-bg;
+            border: 1px solid @ai-start-border;
+            border-radius: 8px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+            color: @project-panel-text-1;
+            white-space: pre-line;
+            line-height: 1.45;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        label.ai-usage-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin: 0;
+            padding: 7px 12px;
+            font-size: @ai-text-meta;
+            font-weight: normal;
+            line-height: 1.4;
+            color: inherit;
+            cursor: pointer;
+
+            &:hover {
+                background: rgba(255, 255, 255, 0.04);
+            }
+
+            input[type="checkbox"] {
+                margin: 0;
+                width: 13px;
+                height: 13px;
+            }
+        }
+    }
+
     .ai-chat-context-bar {
         display: none;
         flex-wrap: wrap;
@@ -2863,103 +5050,50 @@
         .ai-context-chip-icon { color: #e8a838; }
     }
 
-    /* ── Image preview strip (between context bar and textarea) ──────── */
+    /* Comfortable attachment tray. The viewport adapts to the composer's available height. */
     .ai-chat-image-preview {
         display: none;
-        flex-wrap: wrap;
-        gap: 6px;
-        padding: 6px 8px;
+        margin: 0 4px 9px;
+        &.has-images { display: block; }
+    }
 
-        &.has-images {
-            display: flex;
-        }
+    .ai-attachment-count {
+        color: @project-panel-text-2;
+        font-size: @ai-text-secondary;
+        margin-bottom: 8px;
+    }
 
-        .ai-image-thumb {
-            position: relative;
+    .ai-attachment-viewport { position: relative; }
+    .ai-attachment-grid {
+        --ai-attachment-card-width: 169px;
+        display: grid;
+        grid-template-columns: ~"repeat(auto-fill, minmax(min(100%, 160px), 1fr))";
+        gap: 8px;
+        padding: 1px 1px 4px;
+        max-height: 269px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-gutter: stable;
+    }
 
-            img {
-                display: block;
-                max-width: 60px;
-                max-height: 48px;
-                object-fit: cover;
-                border-radius: 4px;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                cursor: pointer;
-            }
-
-            .ai-image-remove {
-                position: absolute;
-                top: -8px;
-                right: -8px;
-                width: 20px;
-                height: 20px;
-                border-radius: 50%;
-                background: rgba(0, 0, 0, 0.6);
-                border: 1px solid rgba(255, 255, 255, 0.3);
-                color: #fff;
-                font-size: @ai-text-secondary;
-                line-height: 1;
-                padding: 0;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                transition: background 150ms, color 150ms;
-
-                &:hover {
-                    background: rgba(255, 255, 255, 0.25);
-                    color: #fff;
-                }
-            }
-        }
-
-        .ai-file-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 6px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 4px;
-            font-size: @ai-text-meta;
-            color: @project-panel-text-2;
-            max-width: 150px;
-            position: relative;
-
-            .ai-file-chip-name {
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-
-            .ai-file-remove {
-                position: absolute;
-                top: -6px;
-                right: -6px;
-                width: 16px;
-                height: 16px;
-                border-radius: 50%;
-                background: rgba(255, 255, 255, 0.12);
-                border: 1px solid rgba(255, 255, 255, 0.18);
-                color: rgba(255, 255, 255, 0.7);
-                font-size: @ai-text-meta;
-                padding: 0;
-                display: none;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                transition: background 150ms, color 150ms;
-
-                &:hover {
-                    background: rgba(255, 255, 255, 0.22);
-                    color: #fff;
-                }
-            }
-
-            &:hover .ai-file-remove {
-                display: flex;
-            }
-        }
+    .ai-attachment-more {
+        position: absolute;
+        right: 14px;
+        z-index: 2;
+        padding: 4px 9px;
+        border: 1px solid @project-panel-text-2;
+        border-radius: 14px;
+        background: @bc-ai-sidebar-bg;
+        color: @project-panel-text-1;
+        box-shadow: 0 2px 8px fade(#000, 50%);
+        font-family: inherit;
+        font-size: @ai-text-secondary;
+        line-height: 18px;
+        cursor: pointer;
+        &[hidden] { display: none; }
+        &.ai-attachment-more-above { top: 7px; }
+        &.ai-attachment-more-below { bottom: 7px; }
+        &:hover { background: lighten(@bc-ai-sidebar-bg, 8%); }
     }
 
     .ai-attach-btn {
@@ -2973,11 +5107,11 @@
         justify-content: center;
         flex-shrink: 0;
         align-self: stretch;
-        border-radius: 7px 0 0 7px;
         opacity: 0.5;
         transition: opacity 0.15s ease, color 0.15s ease;
 
-        &:hover {
+        &:hover,
+        &[aria-expanded="true"] {
             opacity: 1;
             color: @project-panel-text-1;
         }
@@ -2988,79 +5122,11 @@
     }
 
     .ai-chat-textarea {
-        flex: 1;
-        min-width: 0;
-        background: transparent !important;
-        border: none !important;
-        color: @project-panel-text-1;
-        font-size: @ai-text-body;
-        font-family: inherit;
-        padding: 10px 0 10px 12px;
-        margin: 0;
-        resize: none;
-        min-height: 24px;
-        max-height: 120px;
-        line-height: @ai-line-compact;
-        outline: none !important;
-        box-shadow: none !important;
-
-        &:disabled {
-            cursor: not-allowed;
-        }
-    }
-
-    .ai-screenshot-btn {
-        background: none;
-        border: none;
-        color: @project-panel-text-2;
-        width: 28px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        align-self: stretch;
-        opacity: 0.5;
-        transition: opacity 0.15s ease, color 0.15s ease;
-
-        &:hover {
-            opacity: 1;
-            color: @project-panel-text-1;
-        }
-
-        i {
-            font-size: @ai-text-body;
-        }
+        .ai-composer-textarea();
     }
 
     .ai-send-btn {
-        background: none;
-        border: none;
-        color: @project-panel-text-2;
-        width: 30px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        align-self: stretch;
-        border-radius: 0 7px 7px 0;
-        opacity: 0.5;
-        transition: opacity 0.15s ease, color 0.15s ease;
-
-        &:hover {
-            opacity: 1;
-            color: @project-panel-text-1;
-        }
-
-        &:disabled {
-            opacity: 0.2;
-            cursor: not-allowed;
-        }
-
-        i {
-            font-size: @ai-text-body;
-        }
+        .ai-composer-send();
     }
 
     .ai-stop-btn {
@@ -3087,7 +5153,6 @@
         }
     }
 
-    .ai-screenshot-dropup,
     .ai-attach-dropup {
         position: fixed;
         background: @bc-ai-input-bg;
@@ -3098,7 +5163,12 @@
         z-index: 100;
         min-width: 200px;
 
-        .ai-screenshot-option,
+        .ai-attach-divider {
+            height: 1px;
+            margin: 4px 0;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
         .ai-attach-option {
             padding: 8px 12px;
             cursor: pointer;
@@ -3111,6 +5181,16 @@
 
             &:hover {
                 background: rgba(255, 255, 255, 0.08);
+            }
+
+            // Nothing to capture right now (e.g. no Live Preview selection).
+            &.disabled {
+                opacity: 0.45;
+                cursor: default;
+
+                &:hover {
+                    background: none;
+                }
             }
 
             i {
@@ -3162,13 +5242,21 @@
             }
         }
 
-        .ai-screenshot-cancel-btn {
+        .ai-screenshot-cancel-btn,
+        .ai-screenshot-fit-btn {
             background: rgba(255, 255, 255, 0.12);
             color: #ccc;
 
             &:hover {
                 background: rgba(255, 255, 255, 0.2);
             }
+        }
+
+        // Whole-window / smaller-area toggle: an icon-only button before Capture.
+        .ai-screenshot-fit-btn {
+            display: flex;
+            align-items: center;
+            padding: 4px 9px;
         }
     }
 }
@@ -3282,10 +5370,8 @@
     }
 }
 
-/* Browser-build placeholder layout (designed by the team — left-aligned
-   header, video, three info cards, body copy, full-width CTA). Used only
-   when the browser app can't run AI features, so the panel doubles as a
-   marketing surface for the desktop app. */
+/* Shared welcome and CLI setup surfaces. The welcome carousel is used
+   for sign-in and the browser app's desktop-download prompt. */
 
 .ai-placeholder {
     display: flex;
@@ -3373,68 +5459,288 @@
     align-self: center;
 }
 
-.ai-placeholder-cards {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+// The heading travels with each preview; navigation and the CTA stay in place.
+.ai-placeholder.ai-welcome {
+    gap: 0;
+    padding: 22px 20px 24px;
+    overflow-x: hidden;
+
+    .ai-placeholder-title {
+        font-size: 1.64em;
+        font-weight: 600;
+        line-height: 1.25;
+    }
+
+    .ai-placeholder-header {
+        min-height: 69px;
+        flex: 0 0 auto;
+        gap: 8px;
+        margin-bottom: 15px;
+    }
+
+    .ai-placeholder-subtitle {
+        font-size: @ai-text-body;
+        line-height: 1.5;
+        opacity: 1;
+    }
+
+    .ai-placeholder-body {
+        font-size: @ai-text-body;
+        margin: 0 0 13px;
+        opacity: 1;
+    }
+
+    .ai-placeholder-cta {
+        flex: 0 0 auto;
+        margin-top: 0;
+    }
+
+    .ai-intro-video-thumb {
+        max-width: none;
+        max-height: none;
+    }
+}
+
+// Keep both sign-in actions visible when the illustration exceeds the available height.
+.ai-signin {
+    .ai-welcome-carousel {
+        flex-shrink: 1;
+        min-height: 0;
+        overflow-y: auto;
+        scrollbar-width: thin;
+    }
+
+    .ai-placeholder-body {
+        flex-shrink: 0;
+    }
+}
+
+.ai-chat-panel .ai-placeholder .ai-signin-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    align-items: stretch;
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    margin-top: 4px;
+
+    > .ai-placeholder-cta,
+    > .ai-see-demo-card {
+        width: auto;
+        min-width: 0;
+        margin: 0;
+        box-sizing: border-box;
+    }
+
+    .ai-see-demo-name {
+        overflow-wrap: anywhere;
+    }
+}
+
+.ai-welcome-carousel {
+    flex: 0 0 auto;
+    min-width: 0;
+    margin-bottom: 25px;
+}
+
+.ai-welcome-viewport {
+    overflow: hidden;
+}
+
+.ai-welcome-track {
+    display: flex;
+    align-items: stretch;
+    transition: transform 240ms ease;
+}
+
+.ai-welcome-slide {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    flex: 0 0 100%;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
 }
 
-.ai-placeholder-card {
+.ai-welcome-media {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.025);
-    /* Allow the card to shrink at narrow sidebar widths instead of forcing
-       a horizontal scroll. */
-    min-width: 0;
+    justify-content: center;
+    flex: 1 0 auto;
+    min-height: 279px;
 }
 
-.ai-placeholder-card-icon {
-    flex: 0 0 auto;
+.ai-welcome-agents {
+    width: 100%;
+    padding: 4px 0 10px;
+}
+
+.ai-welcome-terminal {
+    width: 86%;
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px solid lighten(@bc-ai-sidebar-bg, 12%);
+    border-radius: 9px;
+    background: mix(@bc-ai-sidebar-bg, #000, 68%);
+    box-shadow: 0 5px 12px rgba(0, 0, 0, 0.12);
+
+    + .ai-welcome-terminal {
+        position: relative;
+        margin: -12px 0 0 auto;
+    }
+}
+
+.ai-welcome-terminal-header {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 36px;
+    padding: 0 12px;
+    background: lighten(@bc-ai-sidebar-bg, 2%);
+    border-bottom: 1px solid lighten(@bc-ai-sidebar-bg, 9%);
+}
+
+.ai-welcome-agent-mark {
+    flex: 0 0 20px;
+    text-align: center;
+    font-size: 1.5em;
+    line-height: 1;
+    color: #e4a184;
+}
+
+.ai-welcome-agent-name {
+    color: @project-panel-text-1;
+    font-size: @ai-text-secondary;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.ai-welcome-terminal-dots {
+    margin-left: auto;
+    color: @project-panel-text-2;
+    letter-spacing: 2px;
+}
+
+.ai-welcome-terminal-lines {
+    padding: 12px 15px 17px;
+    font-family: Consolas, "Liberation Mono", monospace;
+    font-size: @ai-text-secondary;
+    line-height: 1.8;
+    color: @project-panel-text-1;
+}
+
+.ai-welcome-command {
+    color: #e6ac90;
+    margin-bottom: 3px;
+}
+
+.ai-welcome-terminal-status {
+    color: @project-panel-text-2;
+    font-size: @ai-text-meta;
+}
+
+.ai-welcome-codex {
+    .ai-welcome-agent-mark {
+        color: @project-panel-text-1;
+        font-family: monospace;
+        font-size: 1.1em;
+        font-weight: 600;
+    }
+
+    .ai-welcome-command {
+        color: #b5d9d0;
+    }
+}
+
+.ai-welcome-navigation {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 11px;
+
+    &[hidden] {
+        display: none;
+    }
+}
+
+.ai-welcome-arrow,
+.ai-welcome-dot {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.04);
-    color: @project-panel-text-1;
-    font-size: 14px;
-}
-
-.ai-placeholder-card-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    flex: 1 1 auto;
-}
-
-.ai-placeholder-card-title,
-.ai-placeholder-card-desc {
-    /* Wrap long localized strings instead of overflowing the card. */
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-
-.ai-placeholder-card-title {
-    font-size: 13.5px;
-    font-weight: 600;
-    color: @project-panel-text-1;
-    line-height: 1.25;
-}
-
-.ai-placeholder-card-desc {
-    font-size: 12px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
     color: @project-panel-text-2;
-    opacity: 0.8;
-    line-height: 1.3;
+    font-size: @ai-text-secondary;
+    cursor: pointer;
+
+    &:hover {
+        background: lighten(@bc-ai-sidebar-bg, 4%);
+        color: @project-panel-text-1;
+    }
+}
+
+.ai-welcome-arrow {
+    width: 34px;
+}
+
+.ai-welcome-dot span {
+    width: 6px;
+    height: 6px;
+    border-radius: 10px;
+    background: #59656d;
+}
+
+.ai-welcome-dot[aria-pressed="true"] span {
+    width: 15px;
+    background: #95cbed;
+}
+
+@container (max-width: 390px) {
+    .ai-placeholder.ai-welcome {
+        .ai-placeholder-title {
+            font-size: 1.5em;
+        }
+
+        .ai-placeholder-header {
+            min-height: 92px;
+        }
+    }
+
+    .ai-welcome-terminal {
+        width: 96%;
+
+        + .ai-welcome-terminal {
+            margin-top: 8px;
+        }
+    }
+
+    .ai-welcome-terminal-lines {
+        padding: 11px 12px 14px;
+        font-size: @ai-text-meta;
+    }
+}
+
+@media (pointer: coarse) {
+    .ai-welcome-arrow,
+    .ai-welcome-dot {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-welcome-track,
+    .ai-welcome .ai-intro-video-play {
+        transition: none;
+    }
 }
 
 .ai-placeholder-body {
@@ -3688,9 +5994,128 @@
 }
 
 /* ── AI Settings Dialog ────────────────────────────────────────────── */
+/* Label + input pair. */
+.ai-settings-dialog .ai-settings-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    .ai-settings-section-note {
+        margin-bottom: 0;
+    }
+
+    label {
+        font-size: @ai-dialog-text;
+        font-weight: 600;
+        color: @bc-text-medium;
+
+        .dark & {
+            color: @dark-bc-text-medium;
+        }
+    }
+
+    input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px 10px;
+        height: 30px;
+        border: 1px solid @bc-panel-border;
+        border-radius: @bc-border-radius;
+        background: @bc-input-bg;
+        color: @bc-text;
+        font-size: @ai-dialog-text;
+        outline: none;
+
+        &:focus {
+            border-color: @bc-btn-border-focused;
+        }
+
+        &::placeholder {
+            color: @bc-text-quiet;
+            opacity: 0.7;
+        }
+
+        .dark & {
+            border-color: @dark-bc-panel-border;
+            background: @dark-bc-input-bg;
+            color: @dark-bc-text;
+
+            &:focus {
+                border-color: @dark-bc-btn-border-focused;
+            }
+
+            &::placeholder {
+                color: @dark-bc-text-quiet;
+                opacity: 0.7;
+            }
+        }
+    }
+}
+
 .ai-settings-dialog {
+    /* One tab per CLI. Underline rather than a boxed tab: the dialog is
+       already a stack of labelled sections, and a heavier control here
+       would read as the page's primary chrome instead of a filter over the
+       provider list below it. */
+    .ai-settings-tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 14px;
+        border-bottom: 1px solid @bc-panel-separator;
+
+        .dark & {
+            border-bottom-color: @dark-bc-panel-separator;
+        }
+    }
+
+    .ai-settings-tab {
+        background: none;
+        border: none;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        box-shadow: none;
+        padding: 6px 12px;
+        margin-bottom: -1px;
+        cursor: pointer;
+        font-size: @ai-text-body;
+        color: @bc-text-medium;
+
+        &:hover {
+            color: @bc-text;
+        }
+
+        &.active {
+            color: @bc-text;
+            border-bottom-color: @bc-primary-btn-bg;
+            font-weight: 600;
+        }
+
+        .dark & {
+            color: @dark-bc-text-medium;
+
+            &:hover,
+            &.active {
+                color: @dark-bc-text;
+            }
+        }
+    }
+
+    /* Explanatory line under a section label or the tab strip. */
+    .ai-settings-section-note,
+    .ai-settings-tab-note {
+        font-size: @ai-dialog-note;
+        color: @bc-text-medium;
+        opacity: 0.8;
+        margin-bottom: 10px;
+        line-height: @ai-line-prose;
+
+        .dark & {
+            color: @dark-bc-text-medium;
+        }
+    }
+
     .ai-settings-section-label {
-        font-size: @ai-text-secondary;
+        font-size: @ai-dialog-text;
         font-weight: 600;
         color: @bc-text-medium;
         margin-bottom: 6px;
@@ -3746,7 +6171,7 @@
     }
 
     .ai-settings-provider-name {
-        font-size: @ai-text-body;
+        font-size: @ai-dialog-text;
         font-weight: 600;
         color: @bc-text;
         white-space: nowrap;
@@ -3759,7 +6184,7 @@
     }
 
     .ai-settings-provider-url {
-        font-size: @ai-text-meta;
+        font-size: @ai-dialog-note;
         color: @bc-text-medium;
         white-space: nowrap;
         overflow: hidden;
@@ -3798,7 +6223,7 @@
     }
 
     .ai-settings-edit-error {
-        font-size: @ai-text-secondary;
+        font-size: @ai-dialog-note;
         color: @bc-error;
         min-height: 0;
 
@@ -3813,59 +6238,6 @@
         gap: 8px;
     }
 
-    .ai-settings-field {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-
-        label {
-            font-size: @ai-text-secondary;
-            font-weight: 600;
-            color: @bc-text-medium;
-
-            .dark & {
-                color: @dark-bc-text-medium;
-            }
-        }
-
-        input {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 8px 10px;
-            height: 30px;
-            border: 1px solid @bc-panel-border;
-            border-radius: @bc-border-radius;
-            background: @bc-input-bg;
-            color: @bc-text;
-            font-size: @ai-text-body;
-            outline: none;
-
-            &:focus {
-                border-color: @bc-btn-border-focused;
-            }
-
-            &::placeholder {
-                color: @bc-text-quiet;
-                opacity: 0.7;
-            }
-
-            .dark & {
-                border-color: @dark-bc-panel-border;
-                background: @dark-bc-input-bg;
-                color: @dark-bc-text;
-
-                &:focus {
-                    border-color: @dark-bc-btn-border-focused;
-                }
-
-                &::placeholder {
-                    color: @dark-bc-text-quiet;
-                    opacity: 0.7;
-                }
-            }
-        }
-    }
-
     .ai-settings-enable-row {
         display: flex;
         align-items: flex-start;
@@ -3874,7 +6246,8 @@
         cursor: pointer;
 
         input[type="checkbox"] {
-            margin: 2px 0 0;
+            margin: 4px 0 0;
+            top: 0;
             flex-shrink: 0;
             cursor: pointer;
         }
@@ -3888,7 +6261,7 @@
     }
 
     .ai-settings-enable-label {
-        font-size: @ai-text-body;
+        font-size: @ai-dialog-text;
         font-weight: 600;
         color: @bc-text;
 
@@ -3898,7 +6271,7 @@
     }
 
     .ai-settings-enable-note {
-        font-size: @ai-text-meta;
+        font-size: @ai-dialog-note;
         color: @bc-text-medium;
 
         .dark & {
@@ -3950,8 +6323,11 @@
    them paint badly here in light editor themes. Neutralise the skins
    inside the panel so the AI panel's own per-element rules
    (.ai-plan-approve-btn, .ai-plan-revise-btn, .ai-plan-feedback-send,
-   etc.) own the look — and that look is identical in both themes. */
-.ai-chat-panel {
+   etc.) own the look — and that look is identical in both themes.
+   The fullscreen plan overlay is appended to <body>, outside the panel,
+   but it is the same always-dark surface, so it gets the same treatment. */
+.ai-chat-panel,
+.ai-plan-fullscreen-overlay {
     .btn,
     .btn:hover,
     .btn:focus,
@@ -4001,23 +6377,1352 @@
             opacity: 0.6;
         }
     }
-}
 
-/* Onboarding prompt overlay entrance animations. Kept at file scope so
-   the keyframes resolve regardless of nesting context. */
-@keyframes ai-onboarding-overlay-fade {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
+    /* The neutralised .btn skins above outrank the single-class plan
+       control rules (.ai-plan-approve-btn etc.), which would leave those
+       buttons as bare text. Re-assert their look at matching specificity
+       so they read as buttons in both themes and on both surfaces. */
+    .ai-plan-approve-btn {
+        background: rgba(76, 175, 80, 0.15);
+        border: 1px solid rgba(76, 175, 80, 0.35);
+        color: #4caf50;
 
-@keyframes ai-onboarding-card-pop {
-    from {
-        opacity: 0;
-        transform: scale(0.96) translateY(6px);
+        &:hover:not(:disabled) {
+            background: rgba(76, 175, 80, 0.25);
+        }
+
+        &.selected {
+            background: rgba(76, 175, 80, 0.2);
+            border-color: rgba(76, 175, 80, 0.5);
+        }
     }
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
+
+    .ai-plan-revise-btn {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: @project-panel-text-2;
+
+        &:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        &.selected {
+            background: rgba(107, 158, 255, 0.1);
+            border-color: rgba(107, 158, 255, 0.3);
+            color: #6b9eff;
+        }
+    }
+
+    .ai-plan-feedback-send {
+        background: rgba(107, 158, 255, 0.15);
+        border: 1px solid rgba(107, 158, 255, 0.3);
+        color: #6b9eff;
+
+        &:hover:not(:disabled) {
+            background: rgba(107, 158, 255, 0.25);
+        }
+    }
+
+    .ai-plan-reject-btn {
+        background: rgba(229, 115, 115, 0.08);
+        border: 1px solid rgba(229, 115, 115, 0.3);
+        color: #e57373;
+        font-size: @ai-text-secondary;
+        line-height: @ai-line-compact;
+        padding: 4px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+
+        &:hover:not(:disabled) {
+            background: rgba(229, 115, 115, 0.18);
+        }
     }
 }
 
+/* CLI setup dialog: two boxed choices, each carrying its own action, so the
+   button always sits beside the thing it acts on. Themed — unlike the
+   sidebar, dialogs follow the editor's light/dark theme. */
+.ai-cli-setup {
+    .ai-cli-setup-intro {
+        margin: 0 0 14px;
+    }
+
+    .ai-cli-setup-option {
+        border: 1px solid rgba(128, 128, 128, 0.35);
+        border-radius: 8px;
+        padding: 12px 12px 14px;
+        margin-bottom: 10px;
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+    }
+
+    .ai-cli-setup-recommended {
+        border-color: fade(@ai-start-accent, 55%);
+        background: fade(@ai-start-accent, 6%);
+    }
+
+    .ai-cli-setup-option-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        margin-bottom: 2px;
+    }
+
+    .ai-cli-setup-tag {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        padding: 0 6px;
+        border-radius: 8px;
+        color: #2f6fed;
+        border: 1px solid fade(#2f6fed, 50%);
+
+        .dark & {
+            color: @ai-start-accent;
+            border-color: fade(@ai-start-accent, 50%);
+        }
+    }
+
+    .ai-cli-setup-option-desc,
+    .ai-cli-setup-note {
+        font-size: @ai-dialog-note;
+        opacity: 0.75;
+    }
+
+    .ai-cli-setup-option-desc {
+        margin-bottom: 10px;
+    }
+
+    .ai-cli-setup-note {
+        margin-top: 8px;
+    }
+
+    .ai-cli-setup-action {
+        display: flex;
+        align-items: stretch;
+        gap: 8px;
+
+        .ai-cli-setup-command,
+        .ai-cli-path-input {
+            flex: 1;
+            min-width: 0;
+            height: 30px;
+            margin: 0;
+            box-sizing: border-box;
+        }
+
+        .btn {
+            margin: 0;
+            min-width: 118px;
+            height: 30px;
+            white-space: nowrap;
+        }
+    }
+
+    .ai-cli-setup-command {
+        display: flex;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 4px;
+        font-family: 'SourceCodePro-Medium', 'SourceCodePro', monospace;
+        font-size: @ai-text-secondary;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        background: rgba(128, 128, 128, 0.18);
+        -webkit-user-select: text;
+        user-select: text;
+
+        &::before {
+            content: "$";
+            opacity: 0.45;
+            margin-right: 8px;
+        }
+    }
+
+    .ai-cli-path-input.ai-cli-path-invalid {
+        border-color: #d9534f;
+    }
+
+    .ai-cli-setup-error {
+        font-size: @ai-dialog-note;
+        margin-top: 7px;
+        color: #c9302c;
+
+        .dark & {
+            color: #f0776c;
+        }
+    }
+
+    .ai-cli-auto-detect-link {
+        display: inline-block;
+        margin-top: 7px;
+        font-size: @ai-dialog-note;
+    }
+}
+
+/* Left of Cancel in the setup dialog's footer. */
+.modal-footer .ai-cli-what-is-link {
+    float: left;
+    font-size: @ai-dialog-note;
+    line-height: 28px;
+}
+
+// Toast the AI raises through notifyUser; the message is plain text with its line breaks kept.
+.ai-notify-toast {
+    cursor: pointer;
+    .ai-notify-message { white-space: pre-line; }
+    .ai-notify-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 8px;
+    }
+}
+
+// The askInLivePreview card: the answer is given in the preview; the chat offers a way out.
+.ai-chat-panel .ai-ask-detail { display: flex; align-items: center; gap: 10px; }
+.ai-chat-panel .ai-ask-waiting { color: @project-panel-text-2; font-size: @ai-text-secondary; }
+.ai-chat-panel .ai-ask-cancel { border: 1px solid @bc-ai-input-border; border-radius: 4px; background: transparent; color: inherit; font: inherit; font-size: @ai-text-secondary; padding: 2px 10px; cursor: pointer; }
+.ai-chat-panel .ai-ask-cancel:hover { background: rgba(128, 128, 128, 0.2); }
+
+/* ── Usage line under an answer: what that turn took ────────────────── */
+.ai-chat-panel .ai-usage-turn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    // Flush with the answer above it and its "Claude" label.
+    margin: -2px 0 10px;
+    font-size: @ai-text-meta;
+    color: @project-panel-text-2;
+    white-space: nowrap;
+
+    i {
+        font-size: 10px;
+        opacity: 0.7;
+    }
+
+    .ai-usage-sep {
+        opacity: 0.5;
+    }
+
+    // The tokens open their split by kind on hover; the dotted rule hints at it.
+    .ai-usage-turn-tokens {
+        border-bottom: 1px dotted fade(@project-panel-text-1, 50%);
+        cursor: default;
+
+        &:hover {
+            color: @project-panel-text-1;
+        }
+    }
+
+    &.ai-usage-hidden {
+        display: none;
+    }
+}
+
+/* ── Usage card on the start screen: months of use as a heat map ────── */
+/* Hidden until the first turn is on the ledger. The whole card is the
+   Details toggle, so it keeps the start cards' border but not their hover
+   lift: a wash over the coloured cells reads as a flash, not a hint. Only
+   the Details label brightens. Type sits on the start screen's own scale. */
+@ai-usage-heat:  #4f8cff;
+@ai-usage-heat-top: @ai-start-accent;
+@ai-usage-caption: fade(@project-panel-text-2, 70%);
+
+.ai-chat-start .ai-usage-card {
+    margin: 16px 0 8px;
+    padding: 14px 14px 12px;
+    box-sizing: border-box;
+    border: 1px solid @ai-start-border;
+    border-radius: 8px;
+    background: @ai-start-card-bg;
+    font-size: @ai-text-secondary;
+    color: @project-panel-text-1;
+    cursor: pointer;
+    outline: none;
+
+    &:focus-visible {
+        border-color: fade(@ai-start-accent, 50%);
+    }
+
+    &:hover .ai-usage-card-toggle {
+        color: @project-panel-text-1;
+    }
+
+    .ai-usage-card-head {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        margin-bottom: 10px;
+        min-width: 0;
+    }
+
+    .ai-usage-card-title {
+        margin-right: 8px;
+        font-size: @ai-text-body;
+        font-weight: 600;
+    }
+
+    /* The one header item that may give way in a narrow panel. */
+    .ai-usage-card-range {
+        margin-right: 8px;
+        font-size: @ai-text-meta;
+        color: @project-panel-text-2;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.05);
+        white-space: nowrap;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+
+        // With dollars shown, the chip opens the spend tip on hover.
+        &.ai-usage-card-range-spend {
+            cursor: default;
+            text-decoration: underline dotted fade(@project-panel-text-2, 60%);
+            text-underline-offset: 3px;
+        }
+    }
+
+    .ai-usage-card-cost,
+    .ai-usage-card-reload {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        font-size: 11px;
+        color: fade(@project-panel-text-2, 80%);
+        cursor: pointer;
+
+        &:hover {
+            color: @project-panel-text-1;
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        &:focus-visible {
+            outline: 2px solid @project-panel-text-2;
+            outline-offset: 2px;
+        }
+    }
+
+    .ai-usage-card-cost {
+        margin-left: auto;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+        font-family: inherit;
+        font-size: 15px;
+        font-weight: 600;
+
+        &:hover {
+            background: transparent;
+        }
+    }
+
+    /* Other Phoenix windows write the same ledger; this reads it again. */
+    .ai-usage-card-reload.ai-usage-reloading i {
+        animation: ai-usage-spin 0.7s linear infinite;
+    }
+
+    .ai-usage-card-toggle {
+        margin-left: 6px;
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: @ai-text-secondary;
+        color: @project-panel-text-2;
+        white-space: nowrap;
+
+        i {
+            font-size: 9px;
+        }
+    }
+
+    .ai-usage-months {
+        display: flex;
+        justify-content: center;
+        gap: 14px;
+    }
+
+    .ai-usage-month {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .ai-usage-month-name {
+        font-size: @ai-text-meta;
+        color: @ai-usage-caption;
+        margin-bottom: 1px;
+    }
+
+    .ai-usage-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 11px);
+        gap: 3px;
+    }
+
+    .ai-usage-wd {
+        font-size: 10px;
+        line-height: 11px;
+        color: @ai-usage-caption;
+        text-align: center;
+    }
+
+    .ai-usage-cell {
+        display: block;
+        width: 11px;
+        height: 11px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.06);
+
+        &.ai-usage-l1 { background: fade(@ai-usage-heat, 35%); }
+        &.ai-usage-l2 { background: fade(@ai-usage-heat, 60%); }
+        &.ai-usage-l3 { background: fade(@ai-usage-heat, 85%); }
+        &.ai-usage-l4 { background: @ai-usage-heat-top; }
+        // Days of the current month still to come: drawn, never coloured.
+        &.ai-usage-future { background: rgba(255, 255, 255, 0.03); }
+        &.ai-usage-pad { background: transparent; }
+    }
+
+    .ai-usage-legend {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        margin-top: 8px;
+        font-size: @ai-text-meta;
+        color: @ai-usage-caption;
+
+        .ai-usage-fit {
+            margin-right: auto;
+        }
+
+        .ai-usage-scale {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            margin-left: auto;
+        }
+
+        .ai-usage-cell {
+            width: 9px;
+            height: 9px;
+        }
+    }
+
+    /* Details: hidden until the card is opened. */
+    .ai-usage-more {
+        display: none;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    &.ai-usage-open .ai-usage-more {
+        display: block;
+    }
+
+    /* The details' page: the last 30 days, or an earlier calendar month. */
+    .ai-usage-month-nav {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        margin: 0 0 6px -4px;
+    }
+
+    .ai-usage-month-prev,
+    .ai-usage-month-next {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        font-size: 10px;
+        color: fade(@project-panel-text-2, 90%);
+        cursor: pointer;
+
+        &:hover {
+            color: @project-panel-text-1;
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        &.ai-usage-nav-off {
+            color: fade(@project-panel-text-2, 35%);
+            background: none;
+            cursor: default;
+        }
+    }
+
+    .ai-usage-month-label {
+        min-width: 110px;
+        text-align: center;
+        font-size: @ai-text-secondary;
+        color: @project-panel-text-1;
+    }
+
+    /* Stat rows wrap in a narrow panel rather than run past the card. */
+    .ai-usage-big {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 8px 24px;
+        margin: 4px 0 12px;
+
+        .ai-usage-stat b {
+            font-size: 19px;
+            font-weight: 600;
+            line-height: 1.15;
+        }
+
+        // The spend and tokens figures open a tip on hover; the dotted rule hints at it.
+        .ai-usage-stat-spend b,
+        .ai-usage-stat-kinds b {
+            align-self: flex-start;
+            border-bottom: 1px dotted fade(@project-panel-text-1, 50%);
+        }
+    }
+
+    .ai-usage-stat {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.15;
+
+        b {
+            font-size: @ai-text-body;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            color: inherit;
+        }
+
+        span {
+            font-size: @ai-text-meta;
+            color: @ai-usage-caption;
+            margin-top: 2px;
+            white-space: nowrap;
+        }
+    }
+
+    .ai-usage-bars {
+        display: flex;
+        align-items: flex-end;
+        height: 44px;
+        margin-bottom: 4px;
+    }
+
+    .ai-usage-bar {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        height: 100%;
+        min-width: 0;
+        padding: 0 1.5px;
+        box-sizing: border-box;
+        border-radius: 2px;
+
+        &.ai-usage-bar-hovered {
+            outline: 1px solid @project-panel-text-1;
+            outline-offset: -1px;
+            background: rgba(255, 255, 255, 0.05);
+            filter: brightness(1.2);
+        }
+    }
+
+    .ai-usage-bar-fill {
+        display: flex;
+        flex-direction: column-reverse;
+        flex-shrink: 0;
+        border-radius: 2px 2px 0 0;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.03);
+        min-height: 1px;
+        pointer-events: none;
+
+        i {
+            display: block;
+        }
+    }
+
+    .ai-usage-axis {
+        display: flex;
+        justify-content: space-between;
+        font-size: @ai-text-meta;
+        color: @ai-usage-caption;
+        margin-bottom: 10px;
+    }
+
+    .ai-usage-sub {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 12px 0 6px;
+        font-size: @ai-text-meta;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: @ai-usage-caption;
+
+        small {
+            margin-left: auto;
+            font-size: @ai-text-meta;
+            letter-spacing: normal;
+            text-transform: none;
+        }
+    }
+
+    .ai-usage-model {
+        display: grid;
+        grid-template-columns: 10px 1fr auto;
+        align-items: center;
+        gap: 8px;
+        padding: 3px 0;
+    }
+
+    .ai-usage-models-toggle {
+        display: block;
+        margin: 6px 0 0 auto;
+        padding: 2px 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+
+        &:hover { text-decoration: underline; }
+        &:focus-visible { outline: 2px solid @ai-start-accent; outline-offset: 2px; }
+    }
+
+    .ai-usage-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+    .ai-usage-model-name {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+
+        span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    }
+
+    .ai-usage-model-bar {
+        height: 3px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.08);
+
+        i {
+            display: block;
+            height: 100%;
+            border-radius: 2px;
+        }
+    }
+
+    .ai-usage-amt {
+        font-variant-numeric: tabular-nums;
+    }
+
+    .ai-usage-activity {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        margin: 6px 0 4px;
+    }
+
+    .ai-usage-footer {
+        display: flex;
+        justify-content: flex-end;
+        border-top: 1px solid @ai-start-border;
+        margin-top: 14px;
+        padding-top: 9px;
+    }
+
+    .ai-usage-delete {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 4px 0 4px 6px;
+        border: 0;
+        border-radius: 3px;
+        background: transparent;
+        color: @project-panel-text-2;
+        font: inherit;
+        cursor: pointer;
+
+        &:hover { color: @project-panel-text-1; }
+        &:hover span { text-decoration: underline; text-underline-offset: 3px; }
+        &:focus-visible { outline: 2px solid @ai-start-accent; outline-offset: 3px; }
+    }
+}
+
+.modal.ai-usage-cost-dialog {
+    width: 480px;
+    max-width: calc(100vw - 48px);
+
+    .modal-body {
+        font-size: 14px;
+        line-height: 1.6;
+
+        p { margin: 0 0 12px; }
+        .ai-usage-cost-note { margin-bottom: 0; font-size: 12px; opacity: 0.8; }
+    }
+}
+
+.ai-usage-delete-dialog {
+    width: 460px;
+    max-width: calc(100vw - 32px);
+    animation: none !important;
+    transition: none !important;
+
+    & + .modal-backdrop { animation: none !important; transition: none !important; }
+    .modal-body { padding: 17px 20px 20px; }
+    .modal-body p { margin: 0 0 18px; }
+    label { display: block; margin-bottom: 7px; font-weight: @font-weight-semibold; }
+    select { display: block; box-sizing: border-box; width: 100%; margin: 0; }
+    .ai-usage-delete-hint { margin-top: 8px; font-size: @ai-text-secondary; opacity: 0.7; }
+    .modal-body .ai-usage-delete-warning { margin: 18px 0 0; }
+    .ai-usage-delete-error { margin-top: 12px; color: @bc-danger-btn-bg; }
+    .ai-usage-delete-error:empty { display: none; }
+}
+
+@keyframes ai-usage-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* The usage tips: the day under the pointer on the start-screen card, and a
+   token split there or under a turn line. They live on the body so neither the
+   card's overflow nor the scrolling messages can clip them. */
+.ai-usage-day-tip,
+.ai-usage-turn-tip {
+    position: fixed;
+    z-index: 1000;
+    min-width: 196px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    background: @bc-ai-sidebar-bg;
+    border: 1px solid @ai-start-border;
+    border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    font-size: @ai-text-secondary;
+    color: @project-panel-text-1;
+    pointer-events: none;
+
+    .ai-usage-tip-date {
+        font-size: @ai-text-body;
+        font-weight: 600;
+        margin-bottom: 8px;
+        white-space: nowrap;
+    }
+
+    .ai-usage-tip-quiet {
+        color: @project-panel-text-2;
+        white-space: nowrap;
+    }
+
+    .ai-usage-tip-stats {
+        display: flex;
+        gap: 14px;
+        margin-bottom: 9px;
+    }
+
+    .ai-usage-stat {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.15;
+
+        b {
+            font-size: @ai-text-body;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            color: inherit;
+        }
+
+        span {
+            font-size: @ai-text-meta;
+            color: @ai-usage-caption;
+            margin-top: 2px;
+        }
+    }
+
+    .ai-usage-tip-split {
+        display: flex;
+        height: 5px;
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 8px;
+        background: rgba(255, 255, 255, 0.06);
+
+        i {
+            display: block;
+            height: 100%;
+        }
+    }
+
+    .ai-usage-tip-line {
+        display: grid;
+        grid-template-columns: auto 1fr auto auto;
+        align-items: center;
+        gap: 8px;
+        padding: 2px 0;
+        white-space: nowrap;
+    }
+
+    .ai-usage-dot {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+    }
+
+    .ai-usage-tip-pct {
+        color: @project-panel-text-2;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .ai-usage-tip-amt {
+        font-variant-numeric: tabular-nums;
+    }
+
+    // The tokens figure's split: kind, count and share, the total under a rule. A kind
+    // with nothing in it stays in its place, dimmed.
+    .ai-usage-tip-kind {
+        display: grid;
+        grid-template-columns: 1fr auto 34px;
+        gap: 12px;
+        padding: 2px 0;
+        white-space: nowrap;
+
+        .ai-usage-tip-amt,
+        .ai-usage-tip-pct {
+            text-align: right;
+        }
+
+        &.ai-usage-tip-none {
+            color: @project-panel-text-2;
+        }
+
+        &.ai-usage-tip-total {
+            border-top: 1px solid @ai-start-border;
+            margin-top: 4px;
+            padding-top: 6px;
+        }
+    }
+
+    // Wrap the value explanation on narrow windows and preserve its paragraph breaks.
+    .ai-usage-tip-note,
+    .ai-usage-tip-foot {
+        max-width: ~"min(280px, calc(100vw - 42px))";
+        white-space: normal;
+        line-height: 1.45;
+    }
+
+    .ai-usage-tip-note {
+        white-space: pre-line;
+    }
+
+    .ai-usage-tip-foot {
+        margin-top: 8px;
+        padding-top: 7px;
+        border-top: 1px solid @ai-start-border;
+        color: @project-panel-text-2;
+    }
+}
+
+.ai-sparkles-icon {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    background-color: currentColor;
+    -webkit-mask: url("images/ai-sparkles.svg") center / contain no-repeat;
+    mask: url("images/ai-sparkles.svg") center / contain no-repeat;
+}
+
+.ai-selection-actions {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    margin: -4px;
+    gap: 3px;
+    color: @bc-text;
+
+    button {
+        appearance: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        height: 28px;
+        padding: 4px 8px;
+        border: 0;
+        border-radius: 3px;
+        background: transparent;
+        color: inherit;
+        font-family: @sansFontFamily;
+        font-size: @label-font-size;
+        line-height: 20px;
+        white-space: nowrap;
+        cursor: pointer;
+
+        &:hover { background: fade(@bc-text, 8%); }
+        &:active, &[aria-expanded="true"] { background: fade(@bc-text, 14%); }
+        &:focus-visible {
+            outline: 1px solid @bc-primary-btn-border;
+            outline-offset: -1px;
+        }
+    }
+
+    .ai-selection-ask { gap: 6px; }
+
+    .dark & {
+        color: @dark-bc-text;
+        button:hover { background: fade(@dark-bc-text, 8%); }
+        button:active, button[aria-expanded="true"] { background: fade(@dark-bc-text, 14%); }
+        button:focus-visible { outline-color: @dark-bc-text-link; }
+    }
+}
+
+.ai-attachment-flight {
+    position: fixed;
+    z-index: 9999999;
+    pointer-events: none;
+    padding: 7px 10px;
+    border: 1px solid @project-panel-text-2;
+    border-radius: 5px;
+    color: @project-panel-text-1;
+    background: @bc-ai-sidebar-bg;
+    box-shadow: 0 2px 8px fade(#000, 40%);
+    font-size: @ai-text-body;
+}
+
+.ai-chat-panel .ai-attachment-card,
+#phoenix-live-preview-chat .ai-attachment-card {
+    position: relative;
+    box-sizing: border-box;
+    height: 128px;
+    min-width: 0;
+    border: 1px solid fade(#fff, 16%);
+    border-radius: 7px;
+    background: fade(#fff, 3%);
+    overflow: hidden;
+    font-family: inherit;
+    font-size: @ai-text-body;
+    color: @project-panel-text-1;
+    &:hover { border-color: @project-panel-text-2; }
+
+    .ai-attachment-open {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+        overflow: hidden;
+        img {
+            width: 100%;
+            height: 99px;
+            min-height: 0;
+            object-fit: contain;
+            padding: 4px;
+            box-sizing: border-box;
+            .ai-transparency-backdrop(6px);
+        }
+    }
+    .ai-attachment-heading {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        width: 100%;
+        padding: 7px 27px 0 9px;
+        box-sizing: border-box;
+        flex-shrink: 0;
+        line-height: 18px;
+        i { font-size: @ai-text-secondary; color: @project-panel-text-2; }
+        .ai-file-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    }
+    .ai-attachment-excerpt {
+        display: block;
+        width: 100%;
+        padding: 0 9px;
+        margin-top: 6px;
+        box-sizing: border-box;
+        line-height: 18px;
+        span { display: block; overflow: hidden; white-space: pre; text-overflow: ellipsis; }
+    }
+    .ai-attachment-caption {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: auto;
+        padding: 5px 8px;
+        line-height: 18px;
+        border-top: 1px solid fade(#fff, 6%);
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+    .ai-attachment-range { font-size: @ai-text-meta; color: @project-panel-text-2; }
+    .ai-attachment-remove {
+        position: absolute;
+        right: 4px;
+        top: 4px;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: 1px solid fade(#fff, 24%);
+        border-radius: 50%;
+        background: @bc-ai-sidebar-bg;
+        color: @project-panel-text-1;
+        font: inherit;
+        line-height: 1;
+        cursor: pointer;
+    }
+    button:focus-visible { outline: 2px solid @project-panel-text-2; outline-offset: -3px; }
+}
+.ai-user-files .ai-attachment-card { width: 180px; }
+
+/* ── Thinking effort: a chip after the permission control, opening a slider dropdown ───── */
+@ai-effort-accent: #4285F4;
+
+.ai-chat-input-area .ai-chat-mode-row {
+    // Looks like the permission ("Auto") control it sits next to.
+    .ai-effort-chip {
+        position: relative;
+        margin-left: 2px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        height: 22px;
+        padding: 0 6px;
+        border-radius: 4px;
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+
+        &[hidden] {
+            display: none;
+        }
+
+        &:hover, &.ai-effort-open {
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        // An outline bulb with a solid one over it, revealed from the bottom up to the chosen level.
+        .ai-effort-icon {
+            display: inline-grid;
+            font-size: 10px;
+            color: @project-panel-text-2;
+
+            > i {
+                grid-area: ~"1 / 1";
+            }
+        }
+
+        .ai-effort-bulb-fill {
+            clip-path: ~"inset(calc(100% - var(--ai-effort-fill, 0%)) 0 0 0)";
+        }
+
+        &[data-effort-level="xhigh"] .ai-effort-icon,
+        &[data-effort-level="max"] .ai-effort-icon {
+            color: #88733e;
+
+            .dark & {
+                color: #c2ae78;
+            }
+        }
+
+        &[data-effort-level="max"] .ai-effort-icon {
+            filter: drop-shadow(0 0 1px rgba(175, 133, 36, 0.4)) drop-shadow(0 0 3px rgba(175, 133, 36, 0.18));
+
+            .dark & {
+                filter: drop-shadow(0 0 1px rgba(255, 218, 124, 0.55)) drop-shadow(0 0 3px rgba(238, 190, 75, 0.28));
+            }
+        }
+
+        .ai-effort-chip-text {
+            font-size: @ai-text-meta;
+            color: @project-panel-text-2;
+            line-height: 1;
+        }
+
+        .ai-effort-caret {
+            font-size: 9px;
+            opacity: 0.7;
+        }
+    }
+
+    // The input hint ("Enter to send …") flashes briefly; it gets the row's right side to itself.
+    .ai-info.ai-info-flash ~ .ai-usage-chip {
+        display: none;
+    }
+}
+
+/* ── Thinking effort dropdown ─────────────────────────────────────── */
+/* The standard DropdownButton widget, like the model selector, with the slider panel as its one HTML
+   item (as the Tasks status dropdown does). The item itself is not a pick, so it never highlights. */
+.dropdownbutton-popup.ai-effort-dropdown-popup {
+    width: 270px;
+    max-height: 90vh; // the shared 160px cap would scroll the panel
+
+    &.dropdown-menu li a {
+        padding: 6px 12px;
+        white-space: normal;
+        cursor: default;
+    }
+
+    &.dropdown-menu a.selected {
+        background: none;
+    }
+
+    .ai-effort-panel {
+        font-size: @ai-text-meta;
+    }
+
+    .ai-effort-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .ai-effort-heading {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        opacity: 0.6;
+    }
+
+    .ai-effort-value {
+        font-size: 12px;
+    }
+
+    .ai-effort-controls {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .ai-effort-default {
+        flex: none;
+        padding: 1px 9px;
+        border: 1px solid @ai-effort-accent;
+        border-radius: 10px;
+        background: transparent;
+        color: @ai-effort-accent;
+        font-size: @ai-text-meta;
+        cursor: pointer;
+
+        &.active {
+            background: @ai-effort-accent;
+            color: #fff;
+        }
+    }
+
+    .ai-effort-scale {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .ai-effort-slider {
+        display: block;
+        width: 100%;
+        height: 16px;
+        margin: 0;
+        accent-color: @ai-effort-accent;
+        cursor: pointer;
+
+        &.ai-effort-dim {
+            // Default is not a particular stop: show an empty track while keeping it interactive.
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+
+            &::-webkit-slider-runnable-track {
+                height: 4px;
+                border-radius: 2px;
+                background: fade(@project-panel-text-2, 25%);
+            }
+
+            &::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                width: 16px;
+                height: 16px;
+                margin-top: -6px;
+                opacity: 0;
+            }
+
+            &::-moz-range-track {
+                height: 4px;
+                border-radius: 2px;
+                background: fade(@project-panel-text-2, 25%);
+            }
+
+            &::-moz-range-progress {
+                background: transparent;
+            }
+
+            &::-moz-range-thumb {
+                opacity: 0;
+            }
+        }
+    }
+
+    // Labels sit under the slider's stops: the inset keeps them centred on the thumb's travel.
+    .ai-effort-ticks {
+        position: relative;
+        height: 13px;
+        margin: 2px 7px 0;
+        font-size: 10px;
+        opacity: 0.6;
+    }
+
+    .ai-effort-tick {
+        position: absolute;
+        top: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        transform: translateX(-50%);
+        white-space: nowrap;
+
+        &:hover, &:focus-visible {
+            color: @ai-effort-accent;
+        }
+    }
+
+    .ai-effort-hint {
+        margin-top: 8px;
+        opacity: 0.6;
+    }
+}
+
+.ai-chat-panel.ai-mode-cli .ai-effort-chip {
+    display: none;
+}
+
+/* The panel's dropdown triggers share the model picker's chevron. */
+.ai-dropdown-chevron {
+    font-size: 9px;
+    opacity: 0.7;
+    margin-left: 5px;
+}
+
+.ai-rich-source-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: normal;
+
+    .ai-rich-source-status { flex: none; opacity: 0.65; white-space: nowrap; }
+    .ai-rich-source-progress {
+        flex: 1;
+        min-width: 0;
+        box-sizing: border-box;
+        height: 22px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: pre;
+        padding: 2px 6px;
+        border-radius: 3px;
+        background: rgba(128, 128, 128, 0.1);
+        color: inherit;
+        font: inherit;
+        line-height: 18px;
+        font-family: 'SourceCodePro-Medium', 'SourceCodePro', monospace;
+        opacity: 0.75;
+        &[hidden] { display: none; }
+    }
+    .ai-rich-see-code {
+        flex: none;
+        margin-left: auto;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        padding: 2px 4px;
+        opacity: 0.7;
+        cursor: pointer;
+        &:hover { opacity: 1; text-decoration: underline; }
+        &:focus-visible { outline: 1px solid currentColor; }
+    }
+}
+
+.ai-rich-source-dialog {
+    width: 960px;
+    .modal-header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+    .ai-rich-source-language { opacity: 0.65; font-size: 12px; }
+    .modal-body { padding: 12px 16px; max-height: none; }
+    .ai-rich-source-info {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        font-size: 12px;
+        > span { opacity: 0.7; }
+        label { margin: 0; font-size: inherit; }
+        input { margin: 0 4px 0 0; }
+    }
+    .ai-rich-source-tools { display: flex; align-items: center; gap: 16px; }
+    .ai-rich-source-copy {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 0;
+        border: 0;
+        background: none;
+        box-shadow: none;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        opacity: 0.8;
+        &:hover { opacity: 1; text-decoration: underline; }
+        &:focus-visible { outline: 1px solid currentColor; outline-offset: 3px; }
+    }
+    .ai-rich-source-editor-holder {
+        height: 60vh;
+        max-height: 640px;
+        position: relative;
+    }
+    .CodeMirror {
+        height: 100%;
+        font-family: 'SourceCodePro-Medium', 'SourceCodePro', monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        border: 1px solid rgba(128, 128, 128, 0.25);
+    }
+}

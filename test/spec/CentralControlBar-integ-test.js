@@ -230,6 +230,36 @@ define(function (require, exports, module) {
                 SidebarView.show();
                 await awaitsFor(function () { return SidebarView.isVisible(); }, "sidebar to show again", 2000);
             });
+
+            it("should keep the handle parked at the CCB edge when the layout is clamped while hidden",
+                async function () {
+                    await openLivePreview();
+                    SidebarView.hide();
+                    await awaitsFor(function () { return !SidebarView.isVisible(); }, "sidebar to hide", 2000);
+
+                    const toolbarWidth = _$("#main-toolbar").is(":visible") ? _$("#main-toolbar").width() : 0;
+                    const maxSidebar = testWindow.innerWidth - CCB_WIDTH - toolbarWidth - 100;
+                    const overLimitWidth = maxSidebar + 50;
+                    expect(overLimitWidth).toBeLessThan(testWindow.innerWidth);
+                    _$("#sidebar").width(overLimitWidth);
+
+                    testWindow.dispatchEvent(new testWindow.Event("resize"));
+
+                    const $resizer = _$(".main-view > .horz-resizer");
+                    expect($resizer.length).toBe(1);
+                    expect(Math.round($resizer[0].getBoundingClientRect().left)).toBe(CCB_WIDTH);
+                    expect(_$("#sidebar")[0].offsetWidth).toBe(overLimitWidth);
+
+                    SidebarView.show();
+                    await awaitsFor(function () { return SidebarView.isVisible(); }, "sidebar to show again", 2000);
+                    const sidebarWidth = _$("#sidebar")[0].offsetWidth;
+                    expect(sidebarWidth).toBeLessThan(overLimitWidth);
+                    const $shownResizer = _$("#sidebar > .horz-resizer");
+                    expect(Math.round($shownResizer[0].getBoundingClientRect().left))
+                        .toBe(sidebarWidth + CCB_WIDTH);
+
+                    SidebarView.resize(200);
+                });
         });
 
         describe("2. CCB buttons", function () {
@@ -1462,15 +1492,16 @@ define(function (require, exports, module) {
                     expect(SidebarView.isVisible()).toBe(true);
                 });
 
-            it("should dispatch VIEW_TOGGLE_LP_FULL_SCREEN from the live preview expand button",
+            it("should dispatch VIEW_TOGGLE_DESIGN_MODE from the live preview expand button",
                 async function () {
                     await openLivePreview();
 
                     const executed = recordCommands(function () {
-                        _$("#fullScreenLivePreviewButton").trigger("click");
+                        _$("#designModeToggleLivePreviewButton").trigger("click");
                     });
 
-                    expect(executed).toContain(Commands.VIEW_TOGGLE_LP_FULL_SCREEN);
+                    expect(executed).toContain(Commands.VIEW_TOGGLE_DESIGN_MODE);
+                    expect(executed).not.toContain(Commands.VIEW_TOGGLE_LP_FULL_SCREEN);
                 });
         });
     });

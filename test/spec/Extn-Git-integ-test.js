@@ -28,6 +28,7 @@ define(function (require, exports, module) {
     }
 
     let $, __PR, testWindow, ExtensionLoader, Menus, Commands, CommandManager, EditorManager, MainViewManager,
+        Strings             = require("strings"),
         SpecRunnerUtils     = require("spec/SpecRunnerUtils"),
         nonGitReadOnlyTestFolder = SpecRunnerUtils.getTestPath("/spec/LowLevelFileIO-test-files");
 
@@ -357,6 +358,44 @@ define(function (require, exports, module) {
                 _verifyHistoryCommits();
             });
 
+            it("should mark every commit local while the repo has no remote", async () => {
+                // This repo was created by `git init` earlier in the suite and
+                // never gained a remote, so nothing in it can have been pushed.
+                // The previous spec leaves file history up and the waterline is
+                // branch-only, so switch back to the branch's history first.
+                await __PR.execCommand(Commands.CMD_GIT_TOGGLE_PANEL);
+                await waitForHistoryVisible(false);
+                await __PR.execCommand(Commands.CMD_GIT_HISTORY_GLOBAL);
+                await waitForHistoryVisible(true);
+
+                const $historyList = $gitPanel.find("#git-history-list");
+                expect($historyList.data("file")).toBeFalsy();
+                const $commits = $historyList.find("tr.history-commit");
+                expect($commits.length).toBeGreaterThanOrEqual(2);
+                // no remote to compare against, so no commit is behind a waterline
+                expect($historyList.find("tr.history-commit.unpushed").length).toBe($commits.length);
+
+                const $banner = $historyList.find("tr.history-push-line.not-pushed");
+                expect($banner.length).toBe(1);
+                expect($banner.find(".push-line-ref").text().trim()).toBe(Strings.GIT_HISTORY_NOT_PUSHED);
+                expect($banner.find(".push-line-note").text().trim()).toBe(Strings.GIT_HISTORY_NO_TRACKING);
+
+                // Both commits fit in one page, so the list is already finished
+                // and closes the local run off at the initial commit.
+                expect($historyList.find("tr.history-push-end").length).toBe(1);
+                expect($historyList.attr("x-finished")).toBe("true");
+                // the waterline rows must not steal the initial-commit marker
+                expect($historyList.find("tr[x-initial-commit='true']").hasClass("history-commit")).toBeTrue();
+
+                // hand the panel back showing file history, the way this spec
+                // found it — the specs after this one run in order and start
+                // from that state.
+                await __PR.execCommand(Commands.CMD_GIT_TOGGLE_PANEL);
+                await waitForHistoryVisible(false);
+                await __PR.execCommand(Commands.CMD_GIT_HISTORY_FILE);
+                await waitForHistoryVisible(true);
+            });
+
             async function waitForHistoryViewerVisible(visible) {
                 await awaitsFor(() => {
                     return $("#history-viewer").is(":visible") === visible;
@@ -647,41 +686,45 @@ define(function (require, exports, module) {
             const BULK_FILE_COUNT = 51;
 
             it("should confirm before opening a large number of changed files", async () => {
-                await showGitPanel();
-                await __PR.closeAll();
-                await awaitsFor(()=>{
-                    return MainViewManager.getWorkingSetSize(MainViewManager.ALL_PANES) === 0;
-                }, "working set to be empty");
+                const changedFiles = ["test.css", "test.js"];
+                await makeFilesChanged(changedFiles);
 
                 for (let i = 0; i < BULK_FILE_COUNT; i++) {
-                    await __PR.writeTextFile(`bulkFile${i}.txt`, `bulk file ${i}\n`, true);
+                    const fileName = `bulkFile${i}.txt`;
+                    await __PR.writeTextFile(fileName, `bulk file ${i}\n`, true);
+                    changedFiles.push(fileName);
                 }
                 await __PR.execCommand(Commands.CMD_GIT_REFRESH);
+                // Refresh dispatches an event without waiting for Git status. Earlier
+                // watcher results can already contain 51 rows while the final files
+                // are still being written, so wait for the complete fixture list.
+                const changedFileCount = changedFiles.length;
                 await awaitsFor(()=>{
-                    return $gitPanel.find(".modified-file").length >= BULK_FILE_COUNT;
+                    const panelFiles = $gitPanel.find(".modified-file").map((index, row) =>
+                        $(row).attr("x-file")).get();
+                    return panelFiles.length === changedFileCount &&
+                        changedFiles.every(fileName => panelFiles.includes(fileName));
                 }, "bulk files to be in modified files list", 30000);
 
-                // nothing is deleted and untracked files are shown, so every row in the
-                // panel is a file the command will open
-                const changedFileCount = $gitPanel.find(".modified-file").length;
-
                 // cancelling the confirmation must not open anything
-                __PR.execCommand(Commands.CMD_GIT_OPEN_CHANGED_FILES); // dont await here as
-                // it only completes after the dialog is closed
+                let openChangedFiles = __PR.execCommand(Commands.CMD_GIT_OPEN_CHANGED_FILES);
                 await __PR.waitForModalDialog("#git-question-dialog", null, 10000);
                 __PR.clickDialogButtonID(__PR.Dialogs.DIALOG_BTN_CANCEL);
                 await __PR.waitForModalDialogClosed("#git-question-dialog");
-                await __PR.execCommand(Commands.CMD_GIT_REFRESH);
+                await openChangedFiles;
                 expect(MainViewManager.getWorkingSetSize(MainViewManager.ALL_PANES)).toBe(0);
 
                 // confirming opens all of them
-                __PR.execCommand(Commands.CMD_GIT_OPEN_CHANGED_FILES);
+                openChangedFiles = __PR.execCommand(Commands.CMD_GIT_OPEN_CHANGED_FILES);
                 await __PR.waitForModalDialog("#git-question-dialog", null, 10000);
                 __PR.clickDialogButtonID(__PR.Dialogs.DIALOG_BTN_OK);
                 await __PR.waitForModalDialogClosed("#git-question-dialog");
+                await openChangedFiles;
                 await awaitsFor(()=>{
-                    return MainViewManager.getWorkingSetSize(MainViewManager.ALL_PANES) === changedFileCount;
-                }, "all changed files to be opened", 30000);
+                    return MainViewManager.getWorkingSetSize(MainViewManager.ALL_PANES) === changedFileCount &&
+                        changedFiles.every(workingSetHas);
+                }, () => `all ${changedFileCount} changed files to be opened; working set has ` +
+                    MainViewManager.getWorkingSetSize(MainViewManager.ALL_PANES), 30000);
 
                 // re-running it now asks nothing as the files are already open. awaiting
                 // here is safe for that reason, a dialog coming up would time out the spec

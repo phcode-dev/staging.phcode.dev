@@ -25,6 +25,9 @@ define(function (require, exports, module) {
     require("test/spec/Native-platform-test");
     require("spec/trust-ring-test");
     require("spec/utframework-suite-test");
+    require("spec/TestEnvironment-test");
+    require("spec/PhoenixBuilder-test");
+    require("spec/PhoenixBuilderHub-test");
     require("spec/Async-test");
     require("spec/CommandManager-test");
     require("spec/CSSUtils-test");
@@ -61,10 +64,13 @@ define(function (require, exports, module) {
     require("spec/JSONUtils-test");
     require("spec/JSUtils-test");
     require("spec/JSUtils-integ-test");
+    require("spec/ScopeManager-integ-test");
     require("spec/KeyBindingManager-test");
     require("spec/KeybindingManager-integ-test");
     require("spec/LanguageManager-test");
     require("spec/LanguageManager-integ-test");
+    require("spec/LanguageToolsQuickFix-test");
+    require("spec/LSPInstall-test");
     require("spec/LowLevelFileIO-test");
     require("spec/Metrics-test");
     require("spec/MultiRangeInlineEditor-test");
@@ -115,7 +121,9 @@ define(function (require, exports, module) {
     require("spec/Template-for-integ-test");
     require("spec/LiveDevelopmentMultiBrowser-test");
     require("spec/LiveDevelopmentCustomServer-test");
+    require("spec/LivePreviewTabs-test");
     require("spec/md-editor-integ-test");
+    require("spec/md-ask-ai-integ-test");
     require("spec/md-editor-edit-integ-test");
     require("spec/md-editor-edit-more-integ-test");
     require("spec/md-editor-table-integ-test");
@@ -154,6 +162,13 @@ define(function (require, exports, module) {
     require("spec/Terminal-integ-test");
     // Node Tests
     require("spec/NodeConnection-test");
+    require("spec/CLILocator-test");
+    require("spec/MediaServer-test");
+    require("spec/NpmNodeShim-test");
+    require("spec/AIImageTools-test");
+    require("spec/AICliConnector-test");
+    require("spec/AIModelEffort-test");
+    require("spec/AIFilePermissions-test");
     // pro test suite optional components
     require("./pro-test-suite");
     // todo TEST_MODERN

@@ -18,7 +18,7 @@
  *
  */
 
-/*global describe, beforeAll, beforeEach, afterAll, awaitsFor, it, awaitsForDone, expect, awaits*/
+/*global describe, beforeAll, beforeEach, afterAll, afterEach, awaitsFor, it, awaitsForDone, expect, awaits*/
 
 define(function (require, exports, module) {
 
@@ -576,6 +576,17 @@ define(function (require, exports, module) {
                 await SpecRunnerUtils.deletePathAsync(mdTestFolder + "/.phcode.json", true);
             }
 
+            /**
+             * Hiding the panel closes Live Preview when no preview client is connected, and in a
+             * test window showing the panel again does not reopen it: tests start Live Preview
+             * themselves. Reopen it the way the app does, so the preview server comes back.
+             */
+            function _reopenLiveDevIfStopped() {
+                if (LiveDevMultiBrowser.status === LiveDevMultiBrowser.STATUS_INACTIVE) {
+                    LiveDevMultiBrowser.open();
+                }
+            }
+
             async function _openMdFileAndWaitForPreview(fileName) {
                 await awaitsForDone(SpecRunnerUtils.openProjectFiles([fileName]),
                     "open " + fileName);
@@ -635,11 +646,21 @@ define(function (require, exports, module) {
             }, 30000);
 
             beforeEach(async function () {
+                // A test that hid the panel can leave Live Preview stopped. Start it again, so one
+                // such test cannot take every later preview in this group down with it.
+                if (LiveDevMultiBrowser.status === LiveDevMultiBrowser.STATUS_INACTIVE) {
+                    await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple.html"]),
+                        "open simple.html to restart live dev");
+                    LiveDevMultiBrowser.open();
+                    await awaitsFor(() => {
+                        return LiveDevMultiBrowser.status === LiveDevMultiBrowser.STATUS_ACTIVE;
+                    }, "live dev to restart", 20000);
+                }
                 // Reset scroll and close files between tests to prevent state leakage
                 _setViewerScrollTop(0);
                 await awaitsForDone(CommandManager.execute(Commands.FILE_CLOSE_ALL, { _forceClose: true }),
                     "close all between cache tests");
-            }, 10000);
+            }, 30000);
 
             it("should switch between MD files with viewer showing correct content", async function () {
                 await _openMdFileAndWaitForPreview("doc1.md");
@@ -766,6 +787,7 @@ define(function (require, exports, module) {
                 await awaitsForDone(CommandManager.execute(Commands.FILE_LIVE_FILE_PREVIEW));
                 await awaitsFor(() => WorkspaceManager.isPanelVisible("live-preview-panel"),
                     "live preview panel to reopen");
+                _reopenLiveDevIfStopped();
                 await _waitForMdPreviewReady(EditorManager.getActiveEditor());
 
                 // Verify iframe persisted (JS variable survived)
@@ -796,7 +818,15 @@ define(function (require, exports, module) {
                 // Scroll down
                 _setViewerScrollTop(300);
                 await awaitsFor(() => _getViewerScrollTop() >= 290, "scroll to apply");
-                const scrollBefore = _getViewerScrollTop();
+                // Reload restores the nearest source block, not an exact pixel offset on rebuilt DOM.
+                const viewerBefore = _getMdIFrameDoc().getElementById("app-viewer");
+                const viewerTop = viewerBefore.getBoundingClientRect().top;
+                const sourceElements = Array.from(_getMdIFrameDoc().querySelectorAll("#viewer-content [data-source-line]"));
+                const anchorBefore = sourceElements.reduce((nearest, element) => {
+                    return Math.abs(element.getBoundingClientRect().top - viewerTop) <
+                        Math.abs(nearest.getBoundingClientRect().top - viewerTop) ? element : nearest;
+                });
+                const sourceLine = anchorBefore.getAttribute("data-source-line");
 
                 // Capture the current h1 DOM node
                 const h1Before = _getMdIFrameDoc().querySelector("#viewer-content h1");
@@ -815,11 +845,13 @@ define(function (require, exports, module) {
                 // Verify edit mode preserved
                 await _assertMdEditMode(true);
 
-                // Verify scroll position approximately preserved
+                // Verify the saved reading position is restored even when a source block is tall.
                 await awaitsFor(() => {
-                    const scroll = _getViewerScrollTop();
-                    return Math.abs(scroll - scrollBefore) < 100;
-                }, "scroll position to be approximately restored after reload");
+                    const mdDoc = _getMdIFrameDoc();
+                    const anchor = mdDoc.querySelector('#viewer-content [data-source-line="' + sourceLine + '"]');
+                    const viewer = mdDoc.getElementById("app-viewer");
+                    return anchor && Math.abs(anchor.getBoundingClientRect().top - viewer.getBoundingClientRect().top) < 2;
+                }, "the same source block to be restored after reload");
             }, 15000);
 
             it("should working set changes sync to iframe and cache entries persist", async function () {
@@ -1268,16 +1300,31 @@ define(function (require, exports, module) {
                 const viewer = mdDoc.querySelector(".app-viewer");
                 const editor = EditorManager.getActiveEditor();
 
-                // Set cursor to line 0 — viewer should scroll to top
-                editor.setCursorPos(0, 0);
-                await awaitsFor(() => viewer.scrollTop < 50,
+                // Opening long.md is a file switch, and for 500ms after one the viewer
+                // drops every cursor scroll request (bridge.js, _suppressScrollToLine) so
+                // it can restore the cached scroll position undisturbed. Moving the cursor
+                // once, when the steps above finish inside that window, sent a request
+                // that was dropped and never repeated - which is why this failed on a fast
+                // run and passed on a slow one. So keep moving it, between two neighbouring
+                // lines so each poll is a fresh cursor move and a fresh request, until the
+                // viewer answers: the first request after the window closes is honoured.
+                function _moveCursorUntil(lineA, lineB, done, message) {
+                    let flip = false;
+                    return awaitsFor(() => {
+                        flip = !flip;
+                        editor.setCursorPos(flip ? lineA : lineB, 0);
+                        return done();
+                    }, message, 5000);
+                }
+
+                // Cursor at the top — viewer should scroll to the top
+                await _moveCursorUntil(0, 1, () => viewer.scrollTop < 50,
                     "viewer to scroll near top when CM cursor at line 0");
                 const topScroll = viewer.scrollTop;
 
-                // Set cursor to last line — viewer should scroll down
+                // Cursor at the end — viewer should scroll down
                 const lastLine = editor.lineCount() - 1;
-                editor.setCursorPos(lastLine, 0);
-                await awaitsFor(() => viewer.scrollTop > topScroll + 100,
+                await _moveCursorUntil(lastLine, lastLine - 1, () => viewer.scrollTop > topScroll + 100,
                     "viewer to scroll down when CM cursor moves to last line");
             }, 10000);
 
@@ -2109,6 +2156,252 @@ define(function (require, exports, module) {
                 await awaitsFor(() => !_isSlashMenuVisible(),
                     "slash menu to dismiss on Escape");
             }, 10000);
+        });
+
+        describe("Image Lightbox", function () {
+
+            let _originalOpenURL;
+
+            beforeAll(async function () {
+                _originalOpenURL = NativeApp.openURLInDefaultBrowser;
+                // The fixture lives in the markdown test project, which earlier suites switch to.
+                if (testWindow && brackets.test.ProjectManager.getProjectRoot().fullPath !== mdTestFolder + "/") {
+                    await SpecRunnerUtils.loadProjectInTestWindow(mdTestFolder);
+                    await SpecRunnerUtils.deletePathAsync(mdTestFolder + "/.phcode.json", true);
+                }
+                if (testWindow && LiveDevMultiBrowser.status !== LiveDevMultiBrowser.STATUS_ACTIVE) {
+                    await awaitsForDone(SpecRunnerUtils.openProjectFiles(["simple.html"]),
+                        "open simple.html for live dev");
+                    LiveDevMultiBrowser.open();
+                    await awaitsFor(() =>
+                        LiveDevMultiBrowser.status === LiveDevMultiBrowser.STATUS_ACTIVE,
+                    "live dev to open", 20000);
+                }
+            }, 30000);
+
+            afterAll(function () {
+                NativeApp.openURLInDefaultBrowser = _originalOpenURL;
+            });
+
+            afterEach(async function () {
+                const lightbox = _getLightbox();
+                if (lightbox) {
+                    lightbox.click();
+                }
+                NativeApp.openURLInDefaultBrowser = _originalOpenURL;
+                await awaitsForDone(CommandManager.execute(Commands.FILE_CLOSE, { _forceClose: true }),
+                    "force close image-test.md");
+            });
+
+            async function _openImageDoc() {
+                await awaitsForDone(SpecRunnerUtils.openProjectFiles(["image-test.md"]),
+                    "open image-test.md");
+                await _waitForMdPreviewReady(EditorManager.getActiveEditor());
+                // The fixture embeds its SVG so these interaction tests need no virtual image server.
+                // Hover checks need the image at its real size.
+                await awaitsFor(() => {
+                    const img = _getImage("Sample image");
+                    return img && img.complete && img.naturalWidth > 0;
+                }, "the sample image to load");
+            }
+
+            function _getLightbox() {
+                const mdDoc = _getMdIFrameDoc();
+                return mdDoc && mdDoc.querySelector(".image-lightbox");
+            }
+
+            function _getImage(alt) {
+                return _getMdIFrameDoc().querySelector(`#viewer-content img[alt="${alt}"]`);
+            }
+
+            function _expectLightboxShows(img) {
+                const lightbox = _getLightbox();
+                expect(lightbox).not.toBeNull();
+                expect(lightbox.querySelector(".image-lightbox-img").src).toBe(img.src);
+                expect(_getMdIFrameDoc().activeElement).toBe(lightbox);
+            }
+
+            it("should open an image on its own in reader mode on click and close on click", async function () {
+                await _openImageDoc();
+                await _enterReaderMode();
+
+                const img = _getImage("Sample image");
+                expect(img).not.toBeNull();
+                img.click();
+                _expectLightboxShows(img);
+
+                _getLightbox().click();
+                expect(_getLightbox()).toBeNull();
+            }, 10000);
+
+            it("should close the lightbox on Escape", async function () {
+                await _openImageDoc();
+                await _enterReaderMode();
+
+                _getImage("Sample image").click();
+                expect(_getLightbox()).not.toBeNull();
+                _dispatchPlainKeyInMdIframe("Escape", { keyCode: 27 });
+                expect(_getLightbox()).toBeNull();
+            }, 10000);
+
+            it("should follow a linked image's link in reader mode instead of opening it", async function () {
+                await _openImageDoc();
+                await _enterReaderMode();
+
+                let capturedURL = null;
+                NativeApp.openURLInDefaultBrowser = function (url) {
+                    capturedURL = url;
+                };
+                _getImage("Linked image").click();
+                await awaitsFor(() => capturedURL !== null, "the image's link to open");
+                expect(capturedURL).toContain("test-image-link.example.com");
+                expect(_getLightbox()).toBeNull();
+            }, 10000);
+
+            it("should select an image on click in edit mode and open it on double-click", async function () {
+                await _openImageDoc();
+                await _enterEditMode();
+
+                const img = _getImage("Sample image");
+                img.click();
+                const popover = _getMdIFrameDoc().getElementById("image-popover");
+                await awaitsFor(() => popover.classList.contains("visible"), "image popover to show");
+                expect(_getLightbox()).toBeNull();
+
+                img.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+                _expectLightboxShows(img);
+                _dispatchPlainKeyInMdIframe("Escape", { keyCode: 27 });
+                expect(_getLightbox()).toBeNull();
+            }, 10000);
+
+            /** Move the pointer to a point of an element, as a real mouse move would report it. */
+            function _moveMouseTo(el, xFraction = 0.5, yFraction = 0.5) {
+                const rect = el.getBoundingClientRect();
+                el.dispatchEvent(new MouseEvent("mousemove", {
+                    bubbles: true,
+                    clientX: rect.left + rect.width * xFraction,
+                    clientY: rect.top + rect.height * yFraction
+                }));
+            }
+
+            function _getExpandButton() {
+                return _getMdIFrameDoc().querySelector(".image-lightbox-expand");
+            }
+
+            function _isExpandButtonVisible() {
+                const expand = _getExpandButton();
+                return !!expand && expand.classList.contains("visible");
+            }
+
+            /** The expand button sits in the image's top-right corner, inset from its edges, on screen. */
+            function _expectExpandButtonInCornerOf(img) {
+                const imgRect = img.getBoundingClientRect();
+                const btnRect = _getExpandButton().getBoundingClientRect();
+                const inset = 10;
+                expect(btnRect.right).toBeCloseTo(imgRect.right - inset, 0);
+                expect(btnRect.top).toBeCloseTo(imgRect.top + inset, 0);
+            }
+
+            it("should show the expand button wherever the pointer moves over an image in edit mode",
+                async function () {
+                    await _openImageDoc();
+                    await _enterEditMode();
+
+                    const img = _getImage("Sample image");
+                    // Each move below is handled before the next statement, so the real pointer resting
+                    // over the runner cannot interleave its own moves.
+                    // Near a corner, not just the centre: any point over the image counts.
+                    _moveMouseTo(img, 0.1, 0.1);
+                    expect(_isExpandButtonVisible()).toBeTrue();
+                    _expectExpandButtonInCornerOf(img);
+                    const expand = _getExpandButton();
+
+                    // Off the image it hides; moving back over it shows it again.
+                    _moveMouseTo(_getMdIFrameDoc().querySelector("#viewer-content h1"));
+                    expect(_isExpandButtonVisible()).toBeFalse();
+                    _moveMouseTo(img, 0.8, 0.7);
+                    expect(_isExpandButtonVisible()).toBeTrue();
+
+                    expand.click();
+                    _expectLightboxShows(img);
+                    expect(_isExpandButtonVisible()).toBeFalse();
+                }, 10000);
+
+            it("should keep the expand button over the image across a scroll while the pointer stays",
+                async function () {
+                    await _openImageDoc();
+                    await _enterEditMode();
+
+                    const img = _getImage("Sample image");
+                    _moveMouseTo(img);
+                    expect(_isExpandButtonVisible()).toBeTrue();
+                    // A scroll used to hide it for good while the pointer stayed on the image. It now
+                    // lives in the scroll container, so it stays in the image's corner.
+                    expect(_getExpandButton().parentNode.id).toBe("app-viewer");
+                    _getMdIFrameDoc().getElementById("app-viewer").dispatchEvent(new Event("scroll"));
+                    expect(_isExpandButtonVisible()).toBeTrue();
+                    _expectExpandButtonInCornerOf(img);
+                    // Moving off and back is still tracked after the scroll.
+                    _moveMouseTo(_getMdIFrameDoc().querySelector("#viewer-content h1"));
+                    expect(_isExpandButtonVisible()).toBeFalse();
+                    _moveMouseTo(img);
+                    expect(_isExpandButtonVisible()).toBeTrue();
+                }, 10000);
+
+            it("should show no expand button over an image in reader mode", async function () {
+                await _openImageDoc();
+                await _enterReaderMode();
+
+                _moveMouseTo(_getImage("Sample image"));
+                expect(_isExpandButtonVisible()).toBeFalse();
+            }, 10000);
+        });
+
+        describe("Splash over the md viewer", function () {
+
+            beforeEach(async function () {
+                // Lightbox cleanup can leave an HTML file active. This check needs its own Markdown document.
+                await awaitsForDone(SpecRunnerUtils.openFiles([mdTestFolder + "/doc1.md"]),
+                    "open doc1.md for the splash");
+                await _waitForMdPreviewReady(EditorManager.getActiveEditor());
+            });
+
+            afterEach(async function () {
+                await awaitsForDone(CommandManager.execute(Commands.FILE_CLOSE, { _forceClose: true }),
+                    "force close the splash document");
+            });
+
+            function _visiblePreviewFrames() {
+                return Array.from(testWindow.document.querySelectorAll(
+                    "#panel-md-preview-frame, #panel-live-preview-frame"))
+                    .filter((frame) => frame.offsetWidth > 0 && frame.offsetHeight > 0);
+            }
+
+            it("should show a splash in place of the md viewer, not beside it", async function () {
+                // What the AI panel's Surprise Me shows while a build is on its way.
+                const ExtensionInterface = brackets.getModule("utils/ExtensionInterface");
+                const LivePreview = await ExtensionInterface.waitAndGetExtensionInterface(
+                    ExtensionInterface._DEFAULT_EXTENSIONS_INTERFACE_NAMES.PHOENIX_LIVE_PREVIEW);
+                await _waitForMdPreviewReady(EditorManager.getActiveEditor());
+                expect(_visiblePreviewFrames().map((frame) => frame.id)).toEqual(["panel-md-preview-frame"]);
+
+                LivePreview.showInterstitial("Setting the stage", "");
+                try {
+                    await awaitsFor(() => {
+                        const frames = _visiblePreviewFrames();
+                        return frames.length === 1 && frames[0].id === "panel-live-preview-frame";
+                    }, "the splash to take the md viewer's place");
+                } finally {
+                    LivePreview.hideInterstitial();
+                }
+
+                // The md file is still the one being edited: the viewer returns.
+                await awaitsFor(() => {
+                    const frames = _visiblePreviewFrames();
+                    return frames.length === 1 && frames[0].id === "panel-md-preview-frame";
+                }, "the md viewer to come back");
+                await _waitForMdPreviewReady(EditorManager.getActiveEditor());
+            }, 15000);
         });
 
     });

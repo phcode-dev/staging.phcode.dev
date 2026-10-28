@@ -19,7 +19,7 @@
  *
  */
 
-/*global describe, it, expect, beforeEach, beforeAll, afterAll, awaitsFor, awaitsForDone */
+/*global describe, it, expect, beforeEach, beforeAll, afterAll, awaitsFor, awaitsForDone, spyOn */
 
 define(function (require, exports, module) {
 
@@ -51,6 +51,27 @@ define(function (require, exports, module) {
             PreferencesManager = null;
             await SpecRunnerUtils.closeTestWindow();
         }, 30000);
+
+        /**
+         * Wait for asynchronous inspection to publish both the diagnostic and its visible status.
+         * @param {string} fileName Current fixture name, used in failure messages.
+         * @param {boolean} hasConflict Whether the preferences conflict should be reported.
+         * @return {Promise<void>}
+         */
+        async function _waitForPreferenceInspection(fileName, hasConflict) {
+            // Inspectors may take up to asyncTimeout; the default two-second UI wait can
+            // expire while valid filesystem-backed inspection is still running on CI.
+            const timeout = PreferencesManager.getExtensionPrefs("linting").get("asyncTimeout") + 5000;
+            await awaitsFor(()=>{
+                const $indicator = testWindow.$("#status-inspection");
+                const conflictShown = testWindow.$("#problems-panel").text()
+                    .includes(Strings.ERROR_PREFS_PROJECT_LINT_MESSAGE);
+                const iconMatches = hasConflict
+                    ? $indicator.is(".inspection-errors, .inspection-repair")
+                    : $indicator.hasClass("inspection-valid");
+                return $indicator.is(":visible") && iconMatches && conflictShown === hasConflict;
+            }, "inspection diagnostic and visible status for " + fileName, timeout);
+        }
 
         async function _verifySinglePreference(fileName, expectedSpaceUnits) {
             const projectWithoutSettings = SpecRunnerUtils.getTestPath("/spec/WorkingSetView-test-files"),
@@ -84,6 +105,58 @@ define(function (require, exports, module) {
             await _verifySinglePreference(".brackets.json", 6);
         }, 100000);
 
+        it("should keep a newer project's preferences when an older project's load finishes last", async function () {
+            const FileUtils = testWindow.brackets.test.FileUtils;
+            const projectWithoutSettings = SpecRunnerUtils.getTestPath("/spec/WorkingSetView-test-files");
+            const realReadAsText = FileUtils.readAsText;
+            let releaseStaleReads;
+            const staleReadsReleased = new Promise(function (resolve) {
+                releaseStaleReads = resolve;
+            });
+            let heldReads = 0, settledReads = 0;
+            // Hold the settings-free project's preference reads until the next
+            // project has loaded, so its reload finishes last.
+            spyOn(FileUtils, "readAsText").and.callFake(function (file, ...args) {
+                const result = realReadAsText.call(FileUtils, file, ...args);
+                const name = file.fullPath.split("/").pop();
+                if (!file.fullPath.startsWith(projectWithoutSettings + "/") ||
+                    (name !== ".phcode.json" && name !== ".brackets.json")) {
+                    return result;
+                }
+                heldReads++;
+                const held = new testWindow.$.Deferred();
+                staleReadsReleased.then(function () {
+                    result.always(function () {
+                        settledReads++;
+                    }).done(held.resolve).fail(held.reject);
+                });
+                return held.promise();
+            });
+            spyOn(PreferencesManager, "_setProjectSettingsFile").and.callThrough();
+            try {
+                // Start elsewhere, so opening the settings-free project is a real switch.
+                await SpecRunnerUtils.loadProjectInTestWindow(testPath);
+                await SpecRunnerUtils.loadProjectInTestWindow(projectWithoutSettings);
+                await SpecRunnerUtils.loadProjectInTestWindow(testPathBracketsPrefsOnly);
+                await awaitsForDone(SpecRunnerUtils.openProjectFiles(".brackets.json"));
+                await awaitsFor(()=>{
+                    return PreferencesManager.get("spaceUnits") === 6;
+                }, "space units to be 6 from the newer project", 10000);
+                expect(heldReads).toBeGreaterThan(0);
+            } finally {
+                releaseStaleReads();
+            }
+            // Every held read settles, and whatever the older reload does next
+            // runs before the next check.
+            await awaitsFor(()=>{
+                return settledReads === heldReads;
+            }, "the older project's reads to finish", 10000);
+
+            const lastSettingsFile = PreferencesManager._setProjectSettingsFile.calls.mostRecent().args[0];
+            expect(lastSettingsFile.startsWith(testPathBracketsPrefsOnly + "/")).toBeTrue();
+            expect(PreferencesManager.get("spaceUnits")).toBe(6);
+        }, 30000);
+
         it("should .phcode.json take precedence over .brackets.json", async function () {
             await SpecRunnerUtils.loadProjectInTestWindow(testPathBothPrefs);
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(".phcode.json"));
@@ -104,26 +177,17 @@ define(function (require, exports, module) {
 
             // there will be an error in problems panel if both present
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(".phcode.json"));
-            await awaitsFor(()=>{
-                return testWindow.$("#status-inspection").hasClass("inspection-errors");
-            }, "lint errors detected on .phcode.json");
             if (!testWindow.$("#problems-panel").is(":visible")) {
                 CommandManager.execute(Commands.VIEW_TOGGLE_PROBLEMS);
             }
-            await awaitsFor(()=>{
-                return testWindow.$("#problems-panel").text().includes(Strings.ERROR_PREFS_PROJECT_LINT_MESSAGE);
-            }, "problem panel on .phcode.json");
+            await _waitForPreferenceInspection(".phcode.json", true);
 
             await awaitsForDone(SpecRunnerUtils.openProjectFiles("test.json"));
-            await awaitsFor(()=>{
-                return !testWindow.$("#status-inspection").hasClass("inspection-errors");
-            }, "no lint errors for normal test.json file");
+            await _waitForPreferenceInspection("test.json", false);
 
             await awaitsForDone(SpecRunnerUtils.openProjectFiles(".brackets.json"));
-            await awaitsFor(()=>{
-                return testWindow.$("#problems-panel").text().includes(Strings.ERROR_PREFS_PROJECT_LINT_MESSAGE);
-            }, "problem panel on .brackets.json");
-        });
+            await _waitForPreferenceInspection(".brackets.json", true);
+        }, 45000);
 
         it("should open .brackets.json file if it has json errors", async function () {
             await SpecRunnerUtils.loadProjectInTestWindow(testPathBracketsPrefsOnlyCorrupt);

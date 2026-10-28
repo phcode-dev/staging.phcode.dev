@@ -12,6 +12,7 @@ function RemoteFunctions(config = {}) {
         // to distinguish between phoenix internal vs user created elements
         PHCODE_INTERNAL_ATTR: "data-phcode-internal-c15r5a9",
         DATA_BRACKETS_ID_ATTR: "data-brackets-id", // data attribute used to track elements for live preview operations
+        LP_REF_ATTR: "data-phcode-lp-ref", // identity of a script-added element, stamped only when it is selected
         HIGHLIGHT_CLASSNAME: "__brackets-ld-highlight" // CSS class name used for highlighting elements in live preview
     };
 
@@ -21,7 +22,8 @@ function RemoteFunctions(config = {}) {
         // this is just a test function here to check if live preview. fn call is working correctly.
         console.log("Hello World", param);
     });
-    const MessageBroker = window._Brackets_MessageBroker; // to be used by plugins.
+    // Injected plugins share this closure; the window property is removed after injection.
+    const MessageBroker = window._Brackets_MessageBroker;
 
     const SHARED_STATE = {
         __description: "Use this to keep shared state for Live Preview Edit instead of window.*",
@@ -37,11 +39,26 @@ function RemoteFunctions(config = {}) {
     let _cssSelectorHighlightTimer = null;
     let _lastHoverTarget = null; // tracks the element currently under the mouse (for same-element skip)
     let _pendingHoverRAF = null; // pending requestAnimationFrame ID for hover updates
+    // a hover shows once the pointer has stayed on an element this long, so the elements
+    // passing under it during a sweep or a scroll don't flash
+    const HOVER_SETTLE_MS = 60;
+    let _hoverSettleTimer = null;
+    let _hoverSettled = false;
 
     // this will store the element that was clicked previously (before the new click)
     // we need this so that we can remove click styling from the previous element when a new element is clicked
     let previouslySelectedElement = null;
+    let _sourcelessObserver = null;
+    let _sourcelessCheckTimer = null;
+    let _sourcelessPath = null;
+    let _sourcelessTag = null;
+    let _sourcelessClass = null;
+    const SOURCELESS_RECOVER_DELAY_MS = 60;
     let _selectedFromEditor = false;
+    // the element selected by name (layers panel row), not by pointer
+    let _namedSelection = null;
+    // the element the caret points at while the selection is held elsewhere
+    let _caretTarget = null;
     // Expose the currently selected element globally for external access
     window.__current_ph_lp_selected = null;
 
@@ -49,7 +66,7 @@ function RemoteFunctions(config = {}) {
         highlightPadding: "rgba(147, 196, 125, 0.55)",
         highlightMargin: "rgba(246, 178, 107, 0.66)",
         outlineEditable: "#4285F4",
-        outlineNonEditable: "#3C3F41"
+        outlineNonEditable: "#6F6F78"
     };
 
     // the following fucntions can be in the handler and live preview will call those functions when the below
@@ -66,6 +83,8 @@ function RemoteFunctions(config = {}) {
         "onElementSelected", // an item is selected in live preview
         "onElementCleanup",
         "onNonEditableElementClick", // called when user clicks on a non-editable element
+        "getHiddenCause", // asked of the "ElementVisibility" handler, see getHiddenCause()
+        "onHiddenElementPicked", // the user picked an element they cannot see, called with its hidden cause
         "handleConfigChange",
         // below  function gets called to render the dropdown when user clicks on the ... menu in the tool box,
         // the handler should retrun html tor ender the dropdown item.
@@ -118,9 +137,11 @@ function RemoteFunctions(config = {}) {
      * inspectable elements are those which doesn't have GLOBALS.DATA_BRACKETS_ID_ATTR ('data-brackets-id'),
      * this normally happens when content is DOM content is inserted by some scripting language
      *
-     * Elements opted out via `phcode-no-lp-edit` (cascades to descendants) or
-     * `phcode-no-lp-edit-this` (this element only) are also non-inspectable so
-     * every downstream tool inherits the opt-out automatically.
+     * The `phcode-no-lp-edit` opt-out is not part of this check: it only keeps the
+     * pointer off an element, see isPointerEditOptedOut.
+     *
+     * @param {DOMElement} element
+     * @param {boolean} [onlyHighlight=false] - If true, bypasses the mode check
      */
     function isElementInspectable(element, onlyHighlight = false) {
         if(config.mode !== 'edit' && !onlyHighlight) {
@@ -128,16 +149,40 @@ function RemoteFunctions(config = {}) {
         }
 
         if(element && // element should exist
-            element.tagName.toLowerCase() !== "body" && // shouldn't be the body tag
+            (!isBodyElement(element) || _isNamedSelection(element)) && // body only when selected by name
             element.tagName.toLowerCase() !== "html" && // shouldn't be the HTML tag
             // this attribute is used by phoenix internal elements
             !element.closest(`[${GLOBALS.PHCODE_INTERNAL_ATTR}]`) &&
-            !_isInsideHeadTag(element) && // shouldn't be inside the head tag like meta tags and all
-            !element.closest('.phcode-no-lp-edit') &&
-            !(element.classList && element.classList.contains('phcode-no-lp-edit-this'))) {
+            !_isInsideHeadTag(element)) { // shouldn't be inside the head tag like meta tags and all
             return true;
         }
         return false;
+    }
+
+    // The body is never selected by pointer (blank clicks deselect, hover stays quiet),
+    // only by name from the layers panel or the caret, and then without the structural tools.
+    function isBodyElement(element) {
+        return !!(element && element.tagName && element.tagName.toLowerCase() === "body");
+    }
+
+    // a named selection lifts the body block, a pointer-only guard
+    function _isNamedSelection(element) {
+        return !!element && element === _namedSelection;
+    }
+
+    /**
+     * Whether the page keeps pointer actions on this element to itself: hover,
+     * click, double click and drops in the live preview leave it alone, so its
+     * own widgets keep working. It is still an element like any other to every
+     * path that is not the pointer - the layers panel, the caret, the tools.
+     * `phcode-no-lp-edit` cascades to descendants, `phcode-no-lp-edit-this` covers
+     * the one element.
+     * @param {DOMElement} element
+     * @returns {boolean}
+     */
+    function isPointerEditOptedOut(element) {
+        return !!(element && element.closest && (element.closest('.phcode-no-lp-edit') ||
+            (element.classList && element.classList.contains('phcode-no-lp-edit-this'))));
     }
 
     /**
@@ -151,6 +196,40 @@ function RemoteFunctions(config = {}) {
     function isElementEditable(element, onlyHighlight = false) {
         // for an element to be editable it should satisfy all inspectable checks and should also have data-brackets-id
         return isElementInspectable(element, onlyHighlight) && element.hasAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR);
+    }
+
+    // no data-brackets-id means a script added the element, so there is no HTML source for it
+    function isSourceless(element) {
+        return !!element && !element.hasAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR);
+    }
+
+    let _lpRefCounter = 0;
+    const LP_REF_PREFIX = "j";
+    const RE_NUMERIC_ID = /^\d+$/;
+
+    function getElementRef(element) {
+        if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+            return null;
+        }
+        const tagId = element.getAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR);
+        if (tagId) {
+            return tagId;
+        }
+        let ref = element.getAttribute(GLOBALS.LP_REF_ATTR);
+        if (!ref) {
+            ref = LP_REF_PREFIX + (++_lpRefCounter);
+            element.setAttribute(GLOBALS.LP_REF_ATTR, ref);
+        }
+        return ref;
+    }
+
+    function getElementByRef(ref) {
+        if (ref === null || ref === undefined || ref === "") {
+            return null;
+        }
+        const text = String(ref);
+        const attr = RE_NUMERIC_ID.test(text) ? GLOBALS.DATA_BRACKETS_ID_ATTR : GLOBALS.LP_REF_ATTR;
+        return window.document.querySelector("[" + attr + '="' + text + '"]');
     }
 
     /**
@@ -182,9 +261,22 @@ function RemoteFunctions(config = {}) {
         getAllToolHandlers: getAllToolHandlers,
         isElementEditable: isElementEditable,
         isElementInspectable: isElementInspectable,
+        isPointerEditOptedOut: isPointerEditOptedOut,
+        isBodyElement: isBodyElement,
+        isSourceless: isSourceless,
+        getElementRef: getElementRef,
+        getElementByRef: getElementByRef,
         isElementVisible: isElementVisible,
+        getHiddenCause: getHiddenCause,
+        announceIfHidden: announceIfHidden,
         screenOffset: screenOffset,
         selectElement: selectElement,
+        isSelectedFromEditor: function () { return _selectedFromEditor; },
+        highlightRuleAroundSelection: highlightRuleAroundSelection,
+        getCaretTarget: function () { return _caretTarget; },
+        isNamedSelection: _isNamedSelection,
+        toMatchableSelector: toMatchableSelector,
+        sendSelectionToEditor: sendSelectionToEditor,
         brieflyDisableHoverListeners: brieflyDisableHoverListeners,
         handleElementClick: handleElementClick,
         cleanupPreviousElementState: cleanupPreviousElementState,
@@ -243,8 +335,38 @@ function RemoteFunctions(config = {}) {
         );
     }
 
-    // Checks if an element is actually visible to the user (not hidden, collapsed, or off-screen)
+    // Why the user cannot see the element as {reason, by, declaration, inPlace}, null when they can.
+    // The "ElementVisibility" tool handler knows more ways of hiding than the basic checks here.
+    function getHiddenCause(element) {
+        if (!element) {
+            return null;
+        }
+        const checker = getToolHandler("ElementVisibility");
+        if (checker && checker.getHiddenCause) {
+            return checker.getHiddenCause(element);
+        }
+        return _isBasicallyVisible(element) ? null : { reason: "hidden", by: element, inPlace: true };
+    }
+
     function isElementVisible(element) {
+        return !getHiddenCause(element);
+    }
+
+    // a pick of an element the user cannot see is answered with why, by a handler that can say it
+    function announceIfHidden(element) {
+        const cause = getHiddenCause(element);
+        if (!cause) {
+            return;
+        }
+        getAllToolHandlers().forEach(handler => {
+            if (handler.onHiddenElementPicked) {
+                handler.onHiddenElementPicked(element, cause);
+            }
+        });
+    }
+
+    // Checks if an element is actually visible to the user (not hidden, collapsed, or off-screen)
+    function _isBasicallyVisible(element) {
         // Check if element has zero dimensions (indicates it's hidden or collapsed)
         const rect = element.getBoundingClientRect();
         if (rect.width === 0 && rect.height === 0) {
@@ -376,34 +498,94 @@ function RemoteFunctions(config = {}) {
         _overlayPool.push(overlay);
     }
 
-    // Update an existing overlay's position, dimensions, and colors to match the target element.
-    // No DOM elements are created or destroyed — only style properties are updated.
-    function _updateOverlay(overlay, element) {
+    // Everything an overlay needs read off the page. Split from the painting
+    // below so a batch of overlays can read first and write after: interleaving
+    // the two forces a layout per element.
+    // What screenOffset() needs off the body, read once for a whole batch
+    // instead of once per element.
+    function _bodyOffsetContext() {
+        const body = window.document.body;
+        if (window.getComputedStyle(body).position === "static") {
+            return { isStatic: true, x: window.pageXOffset, y: window.pageYOffset };
+        }
+        const bodyBounds = body.getBoundingClientRect();
+        return { isStatic: false, x: bodyBounds.left, y: bodyBounds.top };
+    }
+
+    function _offsetFromBounds(bounds, bodyOffset) {
+        if (bodyOffset.isStatic) {
+            return { left: bounds.left + bodyOffset.x, top: bounds.top + bodyOffset.y };
+        }
+        return { left: bounds.left - bodyOffset.x, top: bounds.top - bodyOffset.y };
+    }
+
+    // cut off or skipped by the page, its box is somewhere the page paints other things
+    function _isDisplaced(element) {
+        const cause = getHiddenCause(element);
+        return !!cause && !cause.inPlace;
+    }
+
+    function _measureOverlay(element, bodyOffset) {
         const bounds = element.getBoundingClientRect();
         if (bounds.width === 0 && bounds.height === 0) {
+            return null;
+        }
+        if ((element === previouslySelectedElement || element === _caretTarget) && _isDisplaced(element)) {
+            return null;
+        }
+        const cs = window.getComputedStyle(element);
+        return {
+            bounds: bounds,
+            scroll: _offsetFromBounds(bounds, bodyOffset || _bodyOffsetContext()),
+            bt: parseFloat(cs.borderTopWidth) || 0,
+            br: parseFloat(cs.borderRightWidth) || 0,
+            bb: parseFloat(cs.borderBottomWidth) || 0,
+            bl: parseFloat(cs.borderLeftWidth) || 0,
+            pt: parseFloat(cs.paddingTop) || 0,
+            pr: parseFloat(cs.paddingRight) || 0,
+            pb: parseFloat(cs.paddingBottom) || 0,
+            pl: parseFloat(cs.paddingLeft) || 0,
+            mt: parseFloat(cs.marginTop) || 0,
+            mr: parseFloat(cs.marginRight) || 0,
+            mb: parseFloat(cs.marginBottom) || 0,
+            ml: parseFloat(cs.marginLeft) || 0
+        };
+    }
+
+    function _measureAll(elements) {
+        const bodyOffset = _bodyOffsetContext();
+        const measured = [];
+        for (let i = 0; i < elements.length; i++) {
+            measured.push(_measureOverlay(elements[i], bodyOffset));
+        }
+        return measured;
+    }
+
+    // Margin and padding fills belong to the selected element and to the one the caret
+    // points at. A hover and the other matches of a css rule only get the outline.
+    function _showsBoxModel(element, outlineOnly) {
+        return !outlineOnly && (element === previouslySelectedElement || element === _caretTarget) &&
+            !SHARED_STATE._boxModelHighlightHidden;
+    }
+
+    // Update an existing overlay's position, dimensions, and colors to match the target element.
+    // No DOM elements are created or destroyed — only style properties are updated.
+    function _paintOverlay(overlay, element, measured, outlineOnly) {
+        if (!measured) {
             overlay.classList.add('hidden');
             return;
         }
 
-        const cs = window.getComputedStyle(element);
+        const bounds = measured.bounds;
 
         // Parse box model values (getComputedStyle always resolves to px)
-        const bt = parseFloat(cs.borderTopWidth) || 0,
-            br = parseFloat(cs.borderRightWidth) || 0,
-            bb = parseFloat(cs.borderBottomWidth) || 0,
-            bl = parseFloat(cs.borderLeftWidth) || 0;
-        const pt = parseFloat(cs.paddingTop) || 0,
-            pr = parseFloat(cs.paddingRight) || 0,
-            pb = parseFloat(cs.paddingBottom) || 0,
-            pl = parseFloat(cs.paddingLeft) || 0;
-        const mt = parseFloat(cs.marginTop) || 0,
-            mr = parseFloat(cs.marginRight) || 0,
-            mb = parseFloat(cs.marginBottom) || 0,
-            ml = parseFloat(cs.marginLeft) || 0;
+        const bt = measured.bt, br = measured.br, bb = measured.bb, bl = measured.bl;
+        const pt = measured.pt, pr = measured.pr, pb = measured.pb, pl = measured.pl;
+        const mt = measured.mt, mr = measured.mr, mb = measured.mb, ml = measured.ml;
 
         // Compute the 4 absolute boxes exactly like dev tools:
         // getBoundingClientRect() always returns the border box regardless of box-sizing.
-        const scroll = LivePreviewView.screenOffset(element);
+        const scroll = measured.scroll;
         const borderBox = {
             left: scroll.left,
             top: scroll.top,
@@ -452,7 +634,7 @@ function RemoteFunctions(config = {}) {
 
         // Padding region. Rects stay in place when hidden, only their fill goes away,
         // so nothing has to be rebuilt when they come back.
-        const boxModelHidden = SHARED_STATE._boxModelHighlightHidden;
+        const boxModelHidden = !_showsBoxModel(element, outlineOnly);
         const padColor = boxModelHidden ? "transparent" : COLORS.highlightPadding;
         setRect(refs.padTop, paddingBox.left, paddingBox.top, paddingBox.width, pt, padColor);
         setRect(refs.padBottom, paddingBox.left, contentBox.top + contentBox.height, paddingBox.width, pb, padColor);
@@ -477,8 +659,14 @@ function RemoteFunctions(config = {}) {
         outlineStyle.border = `1px solid ${outlineColor}`;
     }
 
-    function Highlight(trigger) {
+    function _updateOverlay(overlay, element, outlineOnly) {
+        _paintOverlay(overlay, element, _measureOverlay(element), outlineOnly);
+    }
+
+    // outlineOnly: a hover can sit on the selected element too, and must not fill it twice
+    function Highlight(trigger, outlineOnly) {
         this.trigger = !!trigger;
+        this.outlineOnly = !!outlineOnly;
         this.elements = [];
         this.selector = "";
         this._overlays = [];
@@ -496,7 +684,29 @@ function RemoteFunctions(config = {}) {
             this.elements.push(element);
             const overlay = _getOverlay();
             this._overlays.push(overlay);
-            _updateOverlay(overlay, element);
+            _updateOverlay(overlay, element, this.outlineOnly);
+        },
+
+        addAll: function (elements) {
+            const seen = new Set(this.elements);
+            const fresh = [];
+            for (let i = 0; i < elements.length; i++) {
+                const element = elements[i];
+                if (element !== window.document && !seen.has(element)) {
+                    seen.add(element);
+                    fresh.push(element);
+                }
+            }
+            const measured = _measureAll(fresh);
+            for (let i = 0; i < fresh.length; i++) {
+                if (this.trigger) {
+                    _trigger(fresh[i], "highlight", 1);
+                }
+                this.elements.push(fresh[i]);
+                const overlay = _getOverlay();
+                this._overlays.push(overlay);
+                _paintOverlay(overlay, fresh[i], measured[i], this.outlineOnly);
+            }
         },
 
         clear: function () {
@@ -537,8 +747,9 @@ function RemoteFunctions(config = {}) {
             this.elements = elements;
 
             // Update all overlays in place — no DOM creation or destruction
+            const measured = _measureAll(elements);
             for (let i = 0; i < elements.length; i++) {
-                _updateOverlay(this._overlays[i], elements[i]);
+                _paintOverlay(this._overlays[i], elements[i], measured[i], this.outlineOnly);
             }
         }
     };
@@ -557,7 +768,8 @@ function RemoteFunctions(config = {}) {
     /**
      * Applies the current hover state in a single batched DOM update.
      * Called once per animation frame via requestAnimationFrame.
-     * _lastHoverTarget holds the element to highlight (or null to clear).
+     * _lastHoverTarget holds the element to highlight (or null to clear), and is only
+     * shown once the pointer has settled on it.
      */
     function _applyHoverState() {
         _pendingHoverRAF = null;
@@ -572,7 +784,7 @@ function RemoteFunctions(config = {}) {
             hoverBoxHandler.dismiss();
         }
 
-        const element = _lastHoverTarget;
+        const element = _hoverSettled ? _lastHoverTarget : null;
 
         if (element && (element !== previouslySelectedElement || _selectedFromEditor)) {
             _hoverHighlight.add(element);
@@ -592,33 +804,55 @@ function RemoteFunctions(config = {}) {
         }
     }
 
+    function _cancelHoverSettle() {
+        if (_hoverSettleTimer) {
+            clearTimeout(_hoverSettleTimer);
+            _hoverSettleTimer = null;
+        }
+        _hoverSettled = false;
+    }
+
+    function _restartHoverSettle() {
+        _cancelHoverSettle();
+        _hoverSettleTimer = setTimeout(function () {
+            _hoverSettleTimer = null;
+            _hoverSettled = true;
+            _scheduleHoverUpdate();
+        }, HOVER_SETTLE_MS);
+    }
+
+    // a tall element stays under the pointer long enough to settle while the page is still moving
+    function _onScrollWhileHoverSettles() {
+        if (_hoverSettleTimer) {
+            _restartHoverSettle();
+        }
+    }
+
     function onElementHover(event) {
         // don't want highlighting and stuff when auto scrolling or when dragging (svgs)
         // for dragging normal html elements its already taken care of...so we just add svg drag checking
         if (SHARED_STATE.isAutoScrolling || SHARED_STATE._isDraggingSVG) {
             return;
         }
-        if (customReturns.selectorBox && customReturns.selectorBox.isOpen &&
-                customReturns.selectorBox.isOpen()) {
-            return;
-        }
-
         const element = event.target;
 
         if (element === _lastHoverTarget) {
             return;
         }
-        if(!LivePreviewView.isElementInspectable(element) || element.nodeType !== Node.ELEMENT_NODE) {
+        if(isBodyElement(element) || !LivePreviewView.isElementInspectable(element) ||
+                isPointerEditOptedOut(element) || element.nodeType !== Node.ELEMENT_NODE) {
             return;
         }
         _lastHoverTarget = element;
 
         // if _hoverHighlight is uninitialized, initialize it
         if (!_hoverHighlight && shouldShowHighlightOnHover()) {
-            _hoverHighlight = new Highlight(true);
+            _hoverHighlight = new Highlight(true, true);
         }
 
         if (_hoverHighlight && shouldShowHighlightOnHover()) {
+            // the previous hover goes now, this one comes once the pointer settles
+            _restartHoverSettle();
             _scheduleHoverUpdate();
         }
     }
@@ -629,6 +863,7 @@ function RemoteFunctions(config = {}) {
         }
         if (_hoverHighlight && shouldShowHighlightOnHover()) {
             _lastHoverTarget = null;
+            _cancelHoverSettle();
             _scheduleHoverUpdate();
         }
     }
@@ -667,9 +902,11 @@ function RemoteFunctions(config = {}) {
      * @param {Element} element - The DOM element to select
      * @param {boolean} [fromEditor] - If true, this is an editor-cursor-driven selection;
      *   only lightweight highlights (outline, margin/padding overlay) are shown, not interactive
-     *   UI like control box, spacing handles, or measurements.
+     *   UI like the control box or the styles bar.
+     * @param {boolean} [byName] - Selected by name (a layers panel row), so the edit
+     *   opt-out and the body block don't apply while it stays selected.
      */
-    function selectElement(element, fromEditor) {
+    function selectElement(element, fromEditor, byName) {
         // When a cursor-based highlight re-selects the already-selected element,
         // just refresh the highlight overlay without dismissing existing UI panels
         // (control box, editor box, element-info). This prevents cursor activity
@@ -685,8 +922,14 @@ function RemoteFunctions(config = {}) {
         }
 
         dismissUIAndCleanupState();
+        // set after the dismissal, which clears the previous selection's body exemption
+        _namedSelection = byName ? element : null;
+        const hiddenCause = getHiddenCause(element);
         // this should also be there when users are in highlight mode
-        scrollElementToViewPort(element);
+        // a hidden element is scrolled to only while it still holds its box in the page
+        if (!hiddenCause || hiddenCause.inPlace) {
+            scrollElementToViewPort(element);
+        }
 
         if(!LivePreviewView.isElementInspectable(element, true)) {
             return false;
@@ -705,7 +948,7 @@ function RemoteFunctions(config = {}) {
             }
 
             // make sure that the element is actually visible to the user
-            if (isElementVisible(element)) {
+            if (!hiddenCause) {
                 // Notify handlers about element selection
                 getAllToolHandlers().forEach(handler => {
                     if (handler.onElementSelected) {
@@ -715,15 +958,89 @@ function RemoteFunctions(config = {}) {
             }
         }
 
+        // the overlay paints by who is selected, so that is settled first
+        previouslySelectedElement = element;
+        _selectedFromEditor = fromEditor || false;
+        window.__current_ph_lp_selected = element;
+
         if (!_clickHighlight) {
             _clickHighlight = new Highlight();
         }
         _clickHighlight.clear();
         _clickHighlight.add(element);
 
-        previouslySelectedElement = element;
-        _selectedFromEditor = fromEditor || false;
-        window.__current_ph_lp_selected = element;
+        if (isSourceless(element)) {
+            _watchSourcelessSelection(element);
+        }
+    }
+
+    function _elementIndexPath(element) {
+        const path = [];
+        let el = element;
+        while (el && el !== window.document.body) {
+            const parent = el.parentElement;
+            if (!parent) {
+                return null;
+            }
+            path.unshift(Array.prototype.indexOf.call(parent.children, el));
+            el = parent;
+        }
+        return el === window.document.body ? path : null;
+    }
+
+    function _elementAtIndexPath(path) {
+        let el = window.document.body;
+        for (let i = 0; i < path.length && el; i++) {
+            el = el.children[path[i]];
+        }
+        return el || null;
+    }
+
+    // a re-render replaces a script-added node, so re-select the same tag in the same place or dismiss
+    function _watchSourcelessSelection(element) {
+        _unwatchSourcelessSelection();
+        _sourcelessPath = _elementIndexPath(element);
+        if (!_sourcelessPath) {
+            return;
+        }
+        _sourcelessTag = element.tagName;
+        _sourcelessClass = typeof element.className === "string" ? element.className : "";
+        _sourcelessObserver = new MutationObserver(function () {
+            if (_sourcelessCheckTimer || !previouslySelectedElement || previouslySelectedElement.isConnected) {
+                return;
+            }
+            _sourcelessCheckTimer = setTimeout(_recoverSourcelessSelection, SOURCELESS_RECOVER_DELAY_MS);
+        });
+        _sourcelessObserver.observe(window.document.body, { childList: true, subtree: true });
+    }
+
+    function _unwatchSourcelessSelection() {
+        if (_sourcelessObserver) {
+            _sourcelessObserver.disconnect();
+            _sourcelessObserver = null;
+        }
+        if (_sourcelessCheckTimer) {
+            clearTimeout(_sourcelessCheckTimer);
+            _sourcelessCheckTimer = null;
+        }
+        _sourcelessPath = null;
+    }
+
+    function _recoverSourcelessSelection() {
+        _sourcelessCheckTimer = null;
+        const old = previouslySelectedElement;
+        if (!old || old.isConnected || !_sourcelessPath) {
+            return;
+        }
+        const fresh = _elementAtIndexPath(_sourcelessPath);
+        const className = fresh && typeof fresh.className === "string" ? fresh.className : "";
+        if (fresh && fresh.tagName === _sourcelessTag && className === _sourcelessClass &&
+                isSourceless(fresh) && isElementInspectable(fresh, true) && isElementVisible(fresh)) {
+            const fromEditor = _selectedFromEditor;
+            selectElement(fresh, fromEditor);
+        } else {
+            dismissUIAndCleanupState();
+        }
     }
 
     function disableHoverListeners() {
@@ -731,11 +1048,13 @@ function RemoteFunctions(config = {}) {
         window.document.removeEventListener("mousemove", onElementHover);
         window.document.removeEventListener("mouseout", onElementHoverOut);
         window.document.documentElement.removeEventListener("mouseleave", onDocumentMouseLeave);
+        window.document.removeEventListener("scroll", _onScrollWhileHoverSettles, true);
         // Cancel any pending rAF hover update so stale callbacks don't fire
         if (_pendingHoverRAF) {
             cancelAnimationFrame(_pendingHoverRAF);
             _pendingHoverRAF = null;
         }
+        _cancelHoverSettle();
         _lastHoverTarget = null;
     }
 
@@ -754,6 +1073,8 @@ function RemoteFunctions(config = {}) {
             window.document.addEventListener("mousemove", onElementHover);
             window.document.addEventListener("mouseout", onElementHoverOut);
             window.document.documentElement.addEventListener("mouseleave", onDocumentMouseLeave);
+            // scroll does not bubble, capture also sees the page's own scroll containers
+            window.document.addEventListener("scroll", _onScrollWhileHoverSettles, { capture: true, passive: true });
         }
     }
 
@@ -789,11 +1110,11 @@ function RemoteFunctions(config = {}) {
             return;
         }
         // Opted-out elements: silent no-op so the user's existing selection isn't dismissed.
-        // (isElementInspectable would also reject them, but that path runs dismissUIAndCleanupState.)
-        if(element && (element.closest('.phcode-no-lp-edit') || element.classList.contains('phcode-no-lp-edit-this'))) {
+        if(isPointerEditOptedOut(element)) {
             return;
         }
-        if (!LivePreviewView.isElementInspectable(element)) {
+        // a blank-space click lands on the body and deselects, even a body selected by name
+        if (isBodyElement(element) || !LivePreviewView.isElementInspectable(element)) {
             dismissUIAndCleanupState();
             return;
         }
@@ -804,22 +1125,41 @@ function RemoteFunctions(config = {}) {
             selection.removeAllRanges();
         }
 
-        // send cursor movement message to editor so cursor jumps to clicked element
-        if (element.hasAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR) &&
-            config.syncSourceAndPreview !== false) {
-            MessageBroker.send({
-                "tagId": element.getAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR),
-                "nodeID": element.id,
-                "nodeClassList": element.classList,
-                "nodeName": element.nodeName,
-                "allSelectors": window.getAllInheritedSelectorsInOrder(element),
-                "contentEditable": element.contentEditable === "true",
-                "clicked": true
-            });
-        }
+        sendSelectionToEditor(element);
 
         brieflyDisableHoverListeners();
         selectElement(element);
+        // an invisible element can still take the click, like an opacity 0 input over a styled label
+        announceIfHidden(element);
+    }
+
+    /**
+     * Tells the editor which element is now selected, so the cursor jumps to it and
+     * the css reverse highlight follows. Split out of the click handler because a
+     * selection can also be asked for from the editor side, which must report itself
+     * the same way without a pointer gesture ever touching the page.
+     *
+     * @param {HTMLElement} element
+     * @param {boolean=} requested - the editor side asked for this selection, so it keeps its
+     *     focus and reads the report as the echo of its own pick
+     */
+    function sendSelectionToEditor(element, requested) {
+        if (config.syncSourceAndPreview === false) {
+            return;
+        }
+        // sent without a tagId too, so a css file in the editor can still jump to the rule
+        const tagId = element.getAttribute(GLOBALS.DATA_BRACKETS_ID_ATTR);
+        MessageBroker.send({
+            "tagId": tagId || null,
+            "sourceless": !tagId,
+            "nodeID": element.id,
+            "nodeClassList": element.classList,
+            "nodeName": element.nodeName,
+            "allSelectors": window.getAllInheritedSelectorsInOrder(element),
+            "contentEditable": element.contentEditable === "true",
+            "clicked": true,
+            "requested": !!requested
+        });
     }
 
     // clear CSS selector highlights
@@ -842,13 +1182,15 @@ function RemoteFunctions(config = {}) {
         // Highlight all matching elements except the selected one
         // (it already has a click highlight)
         _cssSelectorHighlight = new Highlight();
+        const wanted = [];
         for (let i = 0; i < nodes.length; i++) {
             if (nodes[i] !== previouslySelectedElement &&
                 LivePreviewView.isElementInspectable(nodes[i], true) &&
                 nodes[i].nodeType === Node.ELEMENT_NODE) {
-                _cssSelectorHighlight.add(nodes[i]);
+                wanted.push(nodes[i]);
             }
         }
+        _cssSelectorHighlight.addAll(wanted);
         _cssSelectorHighlight.selector = rule;
     }
 
@@ -862,6 +1204,7 @@ function RemoteFunctions(config = {}) {
             _hoverHighlight.clear();
             _hoverHighlight = null;
         }
+        _caretTarget = null;
         clearCssSelectorHighlight();
     }
 
@@ -875,6 +1218,37 @@ function RemoteFunctions(config = {}) {
         }
         if (LivePreviewView.isElementInspectable(element, true) && element.nodeType === Node.ELEMENT_NODE) {
             _clickHighlight.add(element);
+        }
+    }
+
+    function highlightAll(elements) {
+        if (!_clickHighlight) {
+            _clickHighlight = new Highlight();
+        }
+        const wanted = [];
+        for (let i = 0; i < elements.length; i++) {
+            if (LivePreviewView.isElementInspectable(elements[i], true) &&
+                    elements[i].nodeType === Node.ELEMENT_NODE) {
+                wanted.push(elements[i]);
+            }
+        }
+        _clickHighlight.addAll(wanted);
+    }
+
+    const RE_STATE_PSEUDO = /::?(?:hover|active|focus-within|focus-visible|focus|visited|target|checked|disabled|enabled|placeholder-shown|before|after|first-line|first-letter|marker|placeholder|selection)\b/gi;
+
+    // A :hover or ::before rule styles the element in a state it is not in right
+    // now, so it is matched as the plain selector to reach the elements it styles.
+    function toMatchableSelector(rule) {
+        const stripped = rule.replace(RE_STATE_PSEUDO, "");
+        if (stripped === rule) {
+            return rule;
+        }
+        try {
+            window.document.querySelector(stripped);
+            return stripped;
+        } catch (e) {
+            return rule;
         }
     }
 
@@ -925,35 +1299,69 @@ function RemoteFunctions(config = {}) {
         };
     }
 
+    // Filter out the universal selector (*) from the rule - highlighting everything
+    // is not useful, similar to how we skip the html tag in isElementInspectable.
+    // The rule can be a comma-separated list of selectors (from multi-cursor),
+    // so we filter out any standalone * segments and keep valid ones.
+    function _withoutUniversalSelector(rule) {
+        return toMatchableSelector(rule).split(",").map(s => s.trim()).filter(s => s !== "*").join(",");
+    }
+
+    // only a pick is held, not a selection the caret made before anything held it
+    function _dropCaretMadeSelection() {
+        if (previouslySelectedElement && _selectedFromEditor) {
+            dismissUIAndCleanupState();
+        }
+    }
+
+    /**
+     * Highlight and scroll to what the rule reaches without selecting it: the selection
+     * is held elsewhere (the layers panel) and a picked element keeps it.
+     * @param {string} rule - The CSS rule to highlight
+     * @returns {Element|null} the element the caret points at, null when it is the held one
+     */
+    function highlightRuleAroundSelection(rule) {
+        _dropCaretMadeSelection();
+        rule = _withoutUniversalSelector(rule);
+        // already drawn: the live document and the layers panel both ask for the same caret
+        if (rule && _cssSelectorHighlight && _cssSelectorHighlight.selector === rule) {
+            return _caretTarget;
+        }
+        _caretTarget = null;
+        if (!rule) {
+            clearCssSelectorHighlight();
+            return null;
+        }
+        const nodes = window.document.querySelectorAll(rule);
+        const { element } = findBestElementToSelect(nodes, rule);
+        if (element) {
+            scrollElementToViewPort(element);
+        }
+        // set before drawing, the overlay paints margin and padding by it
+        _caretTarget =element && element !== previouslySelectedElement ? element : null;
+        createCssSelectorHighlight(nodes, rule);
+        return _caretTarget;
+    }
+
     /**
      * Highlight all elements matching a CSS rule and select the best one
      * @param {string} rule - The CSS rule to highlight
+     * @param {boolean} [keepSelection] - highlight around a selection held elsewhere instead
      */
-    function highlightRule(rule) {
+    function highlightRule(rule, keepSelection) {
+        if (keepSelection) {
+            highlightRuleAroundSelection(rule);
+            return;
+        }
         hideHighlight();
 
-        // Filter out the universal selector (*) from the rule - highlighting everything
-        // is not useful, similar to how we skip html/body in isElementInspectable.
-        // The rule can be a comma-separated list of selectors (from multi-cursor),
-        // so we filter out any standalone * segments and keep valid ones.
-        rule = rule.split(",").map(s => s.trim()).filter(s => s !== "*").join(",");
+        rule = _withoutUniversalSelector(rule);
         if (!rule) {
             dismissUIAndCleanupState();
             return;
         }
 
         const nodes = window.document.querySelectorAll(rule);
-
-        // Highlight all matching nodes. selectElement() will narrow _clickHighlight
-        // down to the chosen element below; createCssSelectorHighlight() then
-        // re-highlights the siblings in a separate overlay.
-        for (let i = 0; i < nodes.length; i++) {
-            highlight(nodes[i]);
-        }
-
-        if (_clickHighlight) {
-            _clickHighlight.selector = rule;
-        }
 
         // Both edit and highlight modes go through the same selection path:
         // selectElement() handles scroll-to-view and the prominent click-highlight,
@@ -962,8 +1370,15 @@ function RemoteFunctions(config = {}) {
         // highlighting/scroll behavior without any UI boxes.
         const { element, skipSelection } = findBestElementToSelect(nodes, rule);
 
-        if (!skipSelection) {
+        if (skipSelection) {
+            // A recent preview click owns the selection and its open tools.
+            // Keep the existing selector highlight without re-selecting it.
+            highlightAll(nodes);
+            _clickHighlight.selector = rule;
+        } else {
             if (element) {
+                // Select first: drawing every match here would immediately be
+                // cleared by selectElement() and drawn again as siblings below.
                 selectElement(element, true);
             } else {
                 // No valid element found, dismiss UI
@@ -1003,6 +1418,11 @@ function RemoteFunctions(config = {}) {
         }
         if (_hoverHighlight) {
             _hoverHighlight.redraw();
+        }
+        // rebuilt, not redrawn: its selector also matches the selected element, which it leaves out
+        if (_cssSelectorHighlight && _cssSelectorHighlight.selector) {
+            const rule = _cssSelectorHighlight.selector;
+            createCssSelectorHighlight(window.document.querySelectorAll(rule), rule);
         }
     }
 
@@ -1392,12 +1812,12 @@ function RemoteFunctions(config = {}) {
                 }
 
                 if (freshElement) {
+                    previouslySelectedElement = freshElement;
+                    window.__current_ph_lp_selected = freshElement;
                     if (_clickHighlight) {
                         _clickHighlight.clear();
                         _clickHighlight.add(freshElement);
                     }
-                    previouslySelectedElement = freshElement;
-                    window.__current_ph_lp_selected = freshElement;
                     // After element replacement (e.g., tag name change), the old
                     // DOM node is gone.  Patch the element reference on any
                     // existing UI boxes so that position() doesn't bail on a
@@ -1500,10 +1920,13 @@ function RemoteFunctions(config = {}) {
             previouslySelectedElement = null;
             window.__current_ph_lp_selected = null;
         }
+        _unwatchSourcelessSelection();
+        _namedSelection = null;
 
         // Reset hover tracking so the same-element skip doesn't suppress
         // re-highlighting after a full state cleanup (e.g. Escape, dismiss).
         _lastHoverTarget = null;
+        _cancelHoverSettle();
         if (_pendingHoverRAF) {
             cancelAnimationFrame(_pendingHoverRAF);
             _pendingHoverRAF = null;
@@ -1599,11 +2022,22 @@ function RemoteFunctions(config = {}) {
 
     /**
      * This function dismisses all UI elements and cleans up application state
-     * Called when user presses Esc key, clicks on HTML/Body tags, or other dismissal events
+     * Called when user presses Esc key, clicks on blank page space (the body), or other dismissal events
      */
     function dismissUIAndCleanupState() {
         getAllToolHandlers().forEach(handler => (handler.dismiss && handler.dismiss())); // to dismiss all UI boxes
         cleanupPreviousElementState();
+    }
+
+    // The editor has nothing to highlight. A selection held elsewhere stays.
+    function hideEditorHighlight(keepSelection) {
+        if (keepSelection) {
+            _dropCaretMadeSelection();
+            _caretTarget = null;
+            clearCssSelectorHighlight();
+            return;
+        }
+        dismissUIAndCleanupState();
     }
 
     // init
@@ -1624,7 +2058,7 @@ function RemoteFunctions(config = {}) {
         });
 
         if (config.mode === 'edit') {
-            _hoverHighlight = new Highlight(true);
+            _hoverHighlight = new Highlight(true, true);
             _clickHighlight = new Highlight(true);
 
             // register the event handlers
@@ -1794,7 +2228,7 @@ function RemoteFunctions(config = {}) {
     customReturns = { // we have to do this else the minifier will strip the customReturns variable
         ...customReturns,
         "DOMEditHandler": DOMEditHandler,
-        "hideHighlight": dismissUIAndCleanupState,
+        "hideHighlight": hideEditorHighlight,
         "highlight": highlight,
         "highlightRule": highlightRule,
         "redrawHighlights": redrawHighlights,

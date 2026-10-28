@@ -33,7 +33,7 @@ define(function (require, exports, module) {
             Commands,
             DocumentManager,
             Strings;
-        let testFilePath, testFilePath2, testFilePath3, testDuplicateDir1, testDuplicateDir2, testDuplicateName;
+        let testFolder, testFilePath, testFilePath2, testFilePath3, testDuplicateDir1, testDuplicateDir2, testDuplicateName;
 
         /**
          * Helper function to create multiple test files
@@ -45,7 +45,7 @@ define(function (require, exports, module) {
         async function createTestFiles(count, prefix, content) {
             const testFiles = [];
             for (let i = 0; i < count; i++) {
-                const filePath = SpecRunnerUtils.getTempDirectory() + `/${prefix}-${i}.js`;
+                const filePath = testFolder + `/${prefix}-${i}.js`;
                 testFiles.push(filePath);
                 await jsPromise(
                     SpecRunnerUtils.createTextFile(
@@ -245,17 +245,20 @@ define(function (require, exports, module) {
             DocumentManager = testWindow.brackets.test.DocumentManager;
             Strings = testWindow.Strings;
 
+            // Keep this suite's files separate so cleanup never walks or deletes another suite's fixtures.
+            testFolder = SpecRunnerUtils.getTempDirectory() + "/tabbar";
+
             // Create test files
-            testFilePath = SpecRunnerUtils.getTempDirectory() + "/tabbar-test.js";
-            testFilePath2 = SpecRunnerUtils.getTempDirectory() + "/tabbar-test2.js";
-            testFilePath3 = SpecRunnerUtils.getTempDirectory() + "/tabbar-test3.js";
+            testFilePath = testFolder + "/tabbar-test.js";
+            testFilePath2 = testFolder + "/tabbar-test2.js";
+            testFilePath3 = testFolder + "/tabbar-test3.js";
 
             // Create files with the same name in different directories for testing duplicate name handling
-            testDuplicateDir1 = SpecRunnerUtils.getTempDirectory() + "/dir1";
-            testDuplicateDir2 = SpecRunnerUtils.getTempDirectory() + "/dir2";
+            testDuplicateDir1 = testFolder + "/dir1";
+            testDuplicateDir2 = testFolder + "/dir2";
             testDuplicateName = "duplicate.js";
 
-            await SpecRunnerUtils.createTempDirectory();
+            await SpecRunnerUtils.ensureExistsDirAsync(testFolder);
             await SpecRunnerUtils.ensureExistsDirAsync(testDuplicateDir1);
             await SpecRunnerUtils.ensureExistsDirAsync(testDuplicateDir2);
 
@@ -282,16 +285,15 @@ define(function (require, exports, module) {
                 CommandManager.execute(Commands.FILE_OPEN, { fullPath: testFilePath }),
                 "Open test file"
             );
-        }, 5000);
+        }, 30000);
 
         afterAll(async function () {
-            // Close all files without prompting to save
-            await testWindow.closeAllFiles();
-
-            testWindow = null;
+            // closeTestWindow closes the files and parks the project before deleting fixtures.
+            // Browser IndexedDB cleanup needs the same budget as other integration teardown.
             await SpecRunnerUtils.closeTestWindow();
-            await SpecRunnerUtils.removeTempDirectory();
-        }, 5000);
+            await SpecRunnerUtils.deletePathAsync(testFolder, true);
+            testWindow = null;
+        }, 30000);
 
         /**
          * Helper function to check if a tab for a specific file exists in the tab bar
@@ -2289,7 +2291,7 @@ define(function (require, exports, module) {
                 // Create several test files
                 const testFiles = [];
                 for (let i = 0; i < 10; i++) {
-                    const filePath = SpecRunnerUtils.getTempDirectory() + `/number-test-${i}.js`;
+                    const filePath = testFolder + `/number-test-${i}.js`;
                     testFiles.push(filePath);
                     await jsPromise(SpecRunnerUtils.createTextFile(filePath, `// Number test file ${i}`, FileSystem));
                 }
@@ -2329,7 +2331,7 @@ define(function (require, exports, module) {
                 // Create several test files
                 const testFiles = [];
                 for (let i = 0; i < 10; i++) {
-                    const filePath = SpecRunnerUtils.getTempDirectory() + `/number-test-${i}.js`;
+                    const filePath = testFolder + `/number-test-${i}.js`;
                     testFiles.push(filePath);
                     await jsPromise(SpecRunnerUtils.createTextFile(filePath, `// Number test file ${i}`, FileSystem));
                 }
@@ -2366,7 +2368,7 @@ define(function (require, exports, module) {
                 // First open some files with the default setting
                 const testFiles = [];
                 for (let i = 0; i < 3; i++) {
-                    const filePath = SpecRunnerUtils.getTempDirectory() + `/number-test-${i}.js`;
+                    const filePath = testFolder + `/number-test-${i}.js`;
                     testFiles.push(filePath);
                     await jsPromise(SpecRunnerUtils.createTextFile(filePath, `// Number test file ${i}`, FileSystem));
                 }
@@ -2423,7 +2425,7 @@ define(function (require, exports, module) {
                 // Create test files for first pane
                 const firstPaneFiles = [];
                 for (let i = 0; i < 5; i++) {
-                    const filePath = SpecRunnerUtils.getTempDirectory() + `/first-pane-${i}.js`;
+                    const filePath = testFolder + `/first-pane-${i}.js`;
                     firstPaneFiles.push(filePath);
                     await jsPromise(SpecRunnerUtils.createTextFile(filePath, `// First pane file ${i}`, FileSystem));
                 }
@@ -2431,7 +2433,7 @@ define(function (require, exports, module) {
                 // Create test files for second pane
                 const secondPaneFiles = [];
                 for (let i = 0; i < 5; i++) {
-                    const filePath = SpecRunnerUtils.getTempDirectory() + `/second-pane-${i}.js`;
+                    const filePath = testFolder + `/second-pane-${i}.js`;
                     secondPaneFiles.push(filePath);
                     await jsPromise(SpecRunnerUtils.createTextFile(filePath, `// Second pane file ${i}`, FileSystem));
                 }
@@ -2742,47 +2744,47 @@ define(function (require, exports, module) {
         describe("Tab Bar Scrolling", function () {
             let longTestFilePaths = [];
 
-            beforeEach(async function () {
-                // Create multiple test files to ensure scrolling is needed
-                longTestFilePaths = [];
+            beforeAll(async function () {
+                // These files are read-only fixtures; create them once rather than rewriting
+                // the same 15 files and notifying filesystem watchers before every scroll test.
                 for (let i = 1; i <= 15; i++) {
-                    const filePath = SpecRunnerUtils.getTempDirectory() + `/scroll-test-file-${i}.js`;
+                    const filePath = testFolder + `/scroll-test-file-${i}.js`;
                     longTestFilePaths.push(filePath);
                     await jsPromise(
                         SpecRunnerUtils.createTextFile(filePath, `// Test file ${i} for scrolling`, FileSystem)
                     );
                 }
+            }, 30000);
 
-                // Open all files to create many tabs
-                for (let filePath of longTestFilePaths) {
-                    await awaitsForDone(
-                        CommandManager.execute(Commands.FILE_OPEN, { fullPath: filePath }),
-                        `Open ${filePath}`
-                    );
+            beforeEach(async function () {
+                await testWindow.closeAllFiles();
+                MainViewManager.setLayoutScheme(1, 1);
+                PreferencesManager.set("tabBar.options", { showTabBar: true, numberOfTabs: -1 });
+                await awaitsForDone(
+                    CommandManager.execute(Commands.FILE_OPEN, { fullPath: longTestFilePaths[0] }),
+                    "Open the scrolling fixture's active editor"
+                );
+                // Working-set entries create real tabs without loading and linting 14 more
+                // editors. These cases exercise tab scrolling, not document activation.
+                for (const filePath of longTestFilePaths.slice(1)) {
+                    MainViewManager.addToWorkingSet("first-pane", FileSystem.getFileForPath(filePath));
                 }
 
-                // Wait for tabs to be rendered
+                // Require actual overflow so no scrolling assertion can pass without scrolling.
                 await awaitsFor(
                     function () {
-                        return getTabCount() >= 15;
+                        const tabBar = $("#phoenix-tab-bar")[0];
+                        return getTabCount() === longTestFilePaths.length && tabBar &&
+                            tabBar.scrollWidth > tabBar.clientWidth;
                     },
-                    "All tabs to be created"
+                    "All scrolling tabs to be created and overflow"
                 );
+                $("#phoenix-tab-bar").scrollLeft(0);
             });
 
             afterEach(async function () {
-                // Close all test files
-                for (let filePath of longTestFilePaths) {
-                    const fileObj = FileSystem.getFileForPath(filePath);
-                    try {
-                        await awaitsForDone(
-                            CommandManager.execute(Commands.FILE_CLOSE, { file: fileObj }),
-                            `Close ${filePath}`
-                        );
-                    } catch (e) {
-                        // Ignore errors if file is already closed
-                    }
-                }
+                await testWindow.closeAllFiles();
+                MainViewManager.setLayoutScheme(1, 1);
             });
 
             it("should scroll tab bar horizontally when mouse wheel is scrolled", function () {
@@ -2876,13 +2878,7 @@ define(function (require, exports, module) {
 
                 // Open multiple files in second pane to enable scrolling
                 for (let i = 1; i < 8; i++) {
-                    await awaitsForDone(
-                        CommandManager.execute(Commands.FILE_OPEN, {
-                            fullPath: longTestFilePaths[i],
-                            paneId: "second-pane"
-                        }),
-                        `Open file ${i} in second pane`
-                    );
+                    MainViewManager.addToWorkingSet("second-pane", FileSystem.getFileForPath(longTestFilePaths[i]));
                 }
 
                 // Wait for tabs to be rendered in second pane
@@ -2917,14 +2913,9 @@ define(function (require, exports, module) {
                 const $tabBar = $("#phoenix-tab-bar");
                 expect($tabBar.length).toBe(1);
 
-                // Ensure the tab bar is scrollable by checking if scrollWidth > clientWidth
-                if ($tabBar[0].scrollWidth <= $tabBar[0].clientWidth) {
-                    // Skip test if tab bar is not scrollable
-                    return;
-                }
-
                 // Set initial scroll position to middle to allow scrolling in both directions
                 const maxScroll = $tabBar[0].scrollWidth - $tabBar[0].clientWidth;
+                expect(maxScroll).toBeGreaterThan(200);
                 const midScroll = Math.floor(maxScroll / 2);
                 $tabBar.scrollLeft(midScroll);
 
